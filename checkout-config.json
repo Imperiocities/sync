@@ -1,0 +1,267 @@
+{
+  "lucidtrading.com": {
+    "name": "Lucid Trading",
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/checkout"
+    },
+    "autoFillSequence": [
+      {
+        "action": "fill",
+        "selector": "input[name='coupon_code']",
+        "value": "LAB"
+      },
+      {
+        "action": "click",
+        "selector": "button#apply_coupon_button"
+      }
+    ]
+  },
+  "tradeify.co": {
+    "name": "Tradeify",
+    "disabled": true,
+    "skipValidation": true,
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/checkout"
+    },
+    "autoFillSequence": [
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Add promo code",
+        "optional": true
+      },
+      {
+        "action": "wait",
+        "duration": 500
+      },
+      {
+        "action": "fill",
+        "selector": "input[placeholder='Enter promo code']",
+        "value": "MTZM2Q5W"
+      },
+      {
+        "action": "wait",
+        "duration": 300
+      },
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply"
+      }
+    ]
+  },
+  "app-f.tradeify.co": {
+    "name": "Tradeify",
+    "disabled": true,
+    "skipValidation": true,
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/checkout"
+    },
+    "autoFillSequence": [
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Add promo code",
+        "optional": true
+      },
+      {
+        "action": "wait",
+        "duration": 500
+      },
+      {
+        "action": "fill",
+        "selector": "input[placeholder='Enter promo code']",
+        "value": "MTZM2Q5W"
+      },
+      {
+        "action": "wait",
+        "duration": 300
+      },
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply"
+      }
+    ]
+  },
+  "fundingticks.com": {
+    "name": "Funding Ticks",
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/new-challenge"
+    },
+    "autoFillSequence": [
+      {
+        "action": "fill",
+        "selector": "input[placeholder='Enter coupon code']",
+        "value": "LAB"
+      },
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply"
+      }
+    ]
+  },
+  "alpha-futures.com": {
+    "name": "Alpha Futures",
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/checkout"
+    },
+    "autoFillSequence": [
+      {
+        "action": "fill",
+        "selector": "input[placeholder='Enter Coupon Code']",
+        "value": "LAB"
+      },
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply code"
+      }
+    ]
+  },
+  "myfundedfutures.com": {
+    "name": "My Funded Futures",
+    "skipValidation": true,
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/challenge"
+    },
+    "autoFillSequence": [
+      {
+        "action": "waitForVisible",
+        "selector": "input[placeholder='Discount Code']",
+        "maxWait": 10000
+      },
+      {
+        "action": "fill",
+        "selector": "input[placeholder='Discount Code']",
+        "value": "LAB"
+      },
+      {
+        "action": "wait",
+        "duration": 500
+      },
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply"
+      }
+    ]
+  },
+  "fundednext.com": {
+    "name": "Funded Next",
+    "skipValidation": true,
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/checkout"
+    },
+    "autoFillSequence": [
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply Code",
+        "optional": true
+      },
+      {
+        "action": "wait",
+        "duration": 800
+      },
+      {
+        "action": "fill",
+        "selector": "input[placeholder='Enter your code']",
+        "value": "LAB"
+      },
+      {
+        "action": "wait",
+        "duration": 300
+      },
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply",
+        "waitForEnabled": true,
+        "maxWait": 5000
+      }
+    ]
+  },
+  "app.fundednext.com": {
+    "name": "Funded Next",
+    "skipValidation": true,
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/checkout"
+    },
+    "autoFillSequence": [
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply Code",
+        "optional": true
+      },
+      {
+        "action": "wait",
+        "duration": 800
+      },
+      {
+        "action": "fill",
+        "selector": "input[placeholder='Enter your code']",
+        "value": "LAB"
+      },
+      {
+        "action": "wait",
+        "duration": 300
+      },
+      {
+        "action": "click",
+        "selector": "button",
+        "content": "Apply",
+        "waitForEnabled": true,
+        "maxWait": 5000
+      }
+    ]
+  },
+  "apextraderfunding.com": {
+    "name": "Apex Trader Funding",
+    "checkoutDetection": {
+      "type": "url",
+      "pattern": "/signup"
+    },
+    "autoFillSequence": [
+      {
+        "action": "fill",
+        "selector": "input[name='coupon']",
+        "value": "LAB"
+      }
+    ]
+  },
+  "takeprofittrader.com": {
+    "name": "Take Profit Trader",
+    "disabled": true,
+    "disabledReason": "Handled directly by content-takeprofittrader.js",
+    "checkoutDetection": {
+      "type": "element",
+      "selector": ".tpt-disabled-placeholder"
+    },
+    "autoFillSequence": []
+  },
+  "default": {
+    "name": "Generic Prop Firm",
+    "checkoutDetection": {
+      "type": "element",
+      "selector": "form[action*='checkout'], form[action*='payment']"
+    },
+    "autoFillSequence": [
+      {
+        "action": "fill",
+        "selector": "input[name*='coupon'], input[name*='promo'], input[placeholder*='coupon' i]",
+        "value": "LAB"
+      }
+    ]
+  }
+} 

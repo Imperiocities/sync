@@ -1,0 +1,1732 @@
+/* Estilos para PropFirm Compare Extension - Estilo Honey */
+
+/* Import Instrument Sans font */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
+
+/* Custom Scrollbar - Ultra Thin Green Style for Extension Elements */
+.propfirm-floating-icon::-webkit-scrollbar,
+.propfirm-checkout-reminder::-webkit-scrollbar,
+.propfirm-notification::-webkit-scrollbar {
+  width: 4px;
+}
+
+.propfirm-floating-icon::-webkit-scrollbar-track,
+.propfirm-checkout-reminder::-webkit-scrollbar-track,
+.propfirm-notification::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.propfirm-floating-icon::-webkit-scrollbar-thumb,
+.propfirm-checkout-reminder::-webkit-scrollbar-thumb,
+.propfirm-notification::-webkit-scrollbar-thumb {
+  background: #00E5A0;
+  border-radius: 2px;
+  transition: background 0.2s ease;
+}
+
+.propfirm-floating-icon::-webkit-scrollbar-thumb:hover,
+.propfirm-checkout-reminder::-webkit-scrollbar-thumb:hover,
+.propfirm-notification::-webkit-scrollbar-thumb:hover {
+  background: #00cc66;
+}
+
+.propfirm-floating-icon::-webkit-scrollbar-corner,
+.propfirm-checkout-reminder::-webkit-scrollbar-corner,
+.propfirm-notification::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* SVG Icon System - Professional Font Awesome style icons */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+/* Icon Color Contexts */
+.propfirm-check-icon svg { fill: #00E5A0 !important; }
+.propfirm-success-check svg { fill: #00cc66 !important; }
+.propfirm-error-icon svg { fill: #ff6b6b !important; }
+.discount-icon svg { fill: #000000 !important; }
+
+/* Icono flotante estilo cuadrado que sale del borde */
+.propfirm-floating-icon {
+  position: fixed !important;
+  top: 50vh;  /* Default - can be overridden by inline style */
+  right: 0px !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) translateX(80px) !important;
+  z-index: 2147483646 !important;
+  cursor: grab !important;
+  opacity: 0 !important;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+
+.propfirm-floating-icon.propfirm-icon-visible {
+  opacity: 1 !important;
+  transform: translateY(-50%) translateX(0) !important;
+}
+
+.propfirm-floating-icon:hover {
+  transform: translateY(-50%) translateX(-10px) scale(1.05) !important;
+}
+
+.propfirm-icon-content {
+  position: relative;
+  width: 90px;
+  height: 70px;
+  background: #1a1a1a;
+  border: none;
+  border-radius: 12px 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -6px 0 25px rgba(0, 0, 0, 0.25);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.propfirm-floating-icon:hover .propfirm-icon-content {
+  box-shadow: -8px 0 35px rgba(0, 0, 0, 0.35);
+  background: #222222;
+  transform: translateX(-5px);
+}
+
+/* Franja verde del lado derecho */
+.propfirm-icon-content::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  background: #00E5A0;
+}
+
+
+
+.propfirm-icon-logo {
+  width: 45px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+}
+
+.propfirm-icon-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: brightness(1.1);
+}
+
+
+
+.propfirm-icon-pulse {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border: 2px solid #00E5A0;
+  border-radius: 12px 0 0 12px;
+  opacity: 0;
+  animation: propfirm-pulse 3s infinite;
+}
+
+.propfirm-icon-tooltip {
+  position: absolute;
+  right: 100px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1a1a1a;
+  color: #00E5A0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+}
+
+.propfirm-icon-tooltip:after {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 8px solid transparent;
+  border-left-color: #1a1a1a;
+}
+
+.propfirm-floating-icon:hover .propfirm-icon-tooltip {
+  opacity: 1;
+}
+
+/* Popup estilo Honey con animaciones mejoradas */
+.propfirm-honey-popup {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 2147483647 !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Forzar nuevo stacking context */
+  isolation: isolate !important;
+  contain: layout style paint !important;
+  will-change: opacity, transform !important;
+  transform: translateZ(0) !important;
+  /* Resetear cualquier transform que pueda interferir */
+  transform-style: flat !important;
+  perspective: none !important;
+}
+
+.propfirm-honey-popup.propfirm-popup-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.propfirm-popup-overlay {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: rgba(0, 0, 0, 0) !important;
+  backdrop-filter: blur(0px) !important;
+  -webkit-backdrop-filter: blur(0px) !important;
+  transition: background 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+              backdrop-filter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              -webkit-backdrop-filter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  z-index: inherit !important;
+}
+
+.propfirm-popup-container {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) scale(0.7) translateY(40px) !important;
+  background: #0a0a0a !important;
+  border: 1px solid #1e1e1e !important;
+  border-radius: 16px !important;
+  max-width: 440px !important;
+  width: 100% !important;
+  max-height: 85vh !important;
+  overflow: hidden !important;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2) !important;
+  opacity: 0 !important;
+  filter: blur(2px) !important;
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  z-index: inherit !important;
+}
+
+.propfirm-honey-popup.propfirm-popup-visible .propfirm-popup-container {
+  transform: translate(-50%, -50%) scale(1) translateY(0) !important;
+  opacity: 1 !important;
+  filter: blur(0px) !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8) !important;
+}
+
+.propfirm-honey-popup.propfirm-popup-visible .propfirm-popup-overlay {
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+.propfirm-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  font-size: 16px;
+  color: #888;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.propfirm-close-btn .icon {
+  margin-right: 0;
+}
+
+.propfirm-close-btn .icon svg {
+  width: 16px;
+  height: 16px;
+  fill: #888;
+}
+
+.propfirm-close-btn:hover .icon svg {
+  fill: #fff;
+}
+
+.propfirm-close-btn:hover {
+  background: #2a2a2a;
+  color: #fff;
+  border-color: #444;
+}
+
+.propfirm-popup-header {
+  display: flex;
+  align-items: center;
+  padding: 24px 28px 20px;
+  gap: 12px;
+  border-bottom: 1px solid #1e1e1e;
+  background: #0a0a0a;
+}
+
+.propfirm-logo-icon {
+  width: 32px;
+  height: 32px;
+  background: #00E5A0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #000;
+  overflow: hidden;
+}
+
+.propfirm-logo-icon img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.propfirm-brand {
+  font-weight: 400;
+  color: #ffffff;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.propfirm-brand .brand-light {
+  font-weight: 300 !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.propfirm-brand .brand-bold {
+  font-weight: 700 !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.propfirm-brand img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.propfirm-popup-content {
+  padding: 28px;
+  background: #0a0a0a;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.propfirm-add-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 24px;
+  width: 100%;
+}
+
+.propfirm-popup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 28px 0 24px 0;
+  width: 100%;
+}
+
+.propfirm-apply-btn {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  letter-spacing: -0.01em;
+}
+
+.propfirm-apply-btn.propfirm-primary {
+  background: #00E5A0;
+  color: #000000;
+  font-weight: 700;
+  border: none;
+}
+
+.propfirm-apply-btn.propfirm-primary:hover:not(:disabled) {
+  background: #00cc88;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 229, 160, 0.3);
+}
+
+.propfirm-apply-btn.propfirm-secondary {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1px solid #333333;
+  font-weight: 600;
+}
+
+.propfirm-apply-btn.propfirm-secondary:hover:not(:disabled) {
+  background: #2a2a2a;
+  border-color: #444444;
+  transform: translateY(-1px);
+}
+
+.propfirm-apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.propfirm-popup-footer {
+  text-align: center;
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 400;
+  border-top: 1px solid #1e1e1e;
+  padding-top: 16px;
+  margin-top: 12px;
+  background: #0a0a0a00;
+  width: 100%;
+  line-height: 1.4;
+}
+
+.propfirm-popup-footer a {
+  color: #00E5A0;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.propfirm-popup-footer a:hover {
+  color: #00cc88;
+  text-decoration: underline;
+}
+
+.propfirm-add-icon {
+  width: 24px;
+  height: 24px;
+  background: #00E5A0;
+  color: #000000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.propfirm-add-icon .icon {
+  margin-right: 0;
+}
+
+.propfirm-add-text strong {
+  color: #ffffff;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 6px;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.propfirm-add-text p {
+  color: #888888;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.propfirm-product-info {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: #111111;
+  border: 1px solid #1e1e1e;
+  padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.propfirm-product-image {
+  width: 70px;
+  height: 70px;
+  background: #ffffff1a;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 229, 160, 0.2);
+}
+
+.propfirm-logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #ffffff1a;
+  padding: 4px;
+}
+
+.propfirm-discount-badge {
+  background: #00E5A0;
+  color: #000000;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 8px;
+  border-radius: 6px;
+  position: absolute;
+  top: -30px;
+  right: 41px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.propfirm-discount-badge .icon {
+  margin-right: 3px;
+}
+
+.propfirm-discount-badge .icon svg {
+  width: 11px;
+  height: 11px;
+  fill: #000000;
+}
+
+.propfirm-product-details h3 {
+  margin: 0 0 6px 0 !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.3 !important;
+}
+
+.propfirm-product-details p {
+  margin: 0;
+  font-size: 14px;
+  color: #888888;
+  line-height: 1.4;
+}
+
+.propfirm-banner-message {
+  background: #fff3cd;
+  border-left: 3px solid #ffc107;
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 0 4px 4px 0;
+}
+
+.propfirm-banner-message p {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+}
+
+.propfirm-banner-message p:last-child {
+  margin-bottom: 0;
+}
+
+.propfirm-apply-btn {
+  width: 100%;
+  background: #ff6900;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  margin-bottom: 12px;
+}
+
+.propfirm-apply-btn:hover:not(:disabled) {
+  background: #e55a00;
+}
+
+.propfirm-apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.propfirm-banner-footer {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.propfirm-banner-footer a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+.propfirm-banner-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Estados de éxito */
+.propfirm-honey-banner.propfirm-success {
+  border-color: #00cc66;
+}
+
+.propfirm-success-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.propfirm-success-icon {
+  width: 20px;
+  height: 20px;
+  background: #00cc66;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.propfirm-success-text strong {
+  color: #00cc66;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.propfirm-success-text p {
+  color: #666;
+  margin: 0;
+  font-size: 13px;
+}
+
+.propfirm-success-message {
+  background: #d4edda;
+  border-left: 3px solid #00cc66;
+  padding: 12px;
+  border-radius: 0 4px 4px 0;
+}
+
+.propfirm-success-message p {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: #155724;
+}
+
+.propfirm-success-message p:last-child {
+  margin-bottom: 0;
+}
+
+
+
+/* Popup de códigos */
+.propfirm-codes-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483645;
+  animation: propfirm-fadeIn 0.3s ease-out;
+}
+
+.propfirm-popup-content {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  max-width: 500px;
+  width: 100;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.propfirm-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #333;
+  background: #0a0a0a;
+}
+
+.propfirm-popup-header h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.propfirm-close-popup {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #888;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.propfirm-close-popup:hover {
+  background: #333;
+  color: #fff;
+}
+
+.propfirm-codes-list {
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.propfirm-code-item {
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  position: relative;
+  background: #0a0a0a;
+  transition: all 0.2s ease;
+}
+
+.propfirm-code-item:hover {
+  border-color: #00E5A0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 229, 160, 0.2);
+}
+
+.propfirm-code-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.propfirm-code-value {
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: bold;
+  color: #00E5A0;
+  background: #1a1a1a;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.propfirm-code-discount {
+  background: #FF9800;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.propfirm-code-description {
+  color: #888;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.propfirm-copy-code {
+  background: #00E5A0;
+  color: #000;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.propfirm-copy-code:hover {
+  background: #00CC8F;
+  transform: translateY(-1px);
+}
+
+/* Mensajes de éxito y error */
+.propfirm-success-message,
+.propfirm-error-message {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin: 10px 0;
+  font-weight: 500;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  animation: propfirm-slideIn 0.3s ease-out;
+}
+
+.propfirm-success-message {
+  background: #1a1a1a;
+  color: #00E5A0;
+  border: 1px solid #00E5A0;
+}
+
+.propfirm-error-message {
+  background: #1a1a1a;
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2147483644;
+  max-width: 300px;
+}
+
+/* Animaciones */
+@keyframes propfirm-slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes propfirm-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes propfirm-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .propfirm-floating-icon {
+    right: 10px;
+    top: 50vh;
+  }
+  
+  .propfirm-icon-content {
+    width: 55px;
+    height: 55px;
+  }
+  
+  .propfirm-icon-logo {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+  
+  .propfirm-icon-tooltip {
+    right: 65px;
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  
+  .propfirm-popup-container {
+    width: 95%;
+    max-width: none;
+    margin: 20px;
+  }
+  
+  .propfirm-popup-header {
+    padding: 16px 20px 12px;
+  }
+  
+  .propfirm-popup-content {
+    padding: 20px;
+  }
+  
+  .propfirm-product-info {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+    border-radius: 10px;
+  }
+  
+  .propfirm-popup-actions {
+    gap: 10px;
+    margin: 20px 0;
+  }
+  
+  .propfirm-apply-btn {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+  
+  .propfirm-codes-list {
+    padding: 15px;
+  }
+  
+  .propfirm-code-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Asegurar que nuestros elementos tengan prioridad sobre estilos de la página */
+.propfirm-floating-icon,
+.propfirm-honey-popup,
+.propfirm-codes-popup,
+.propfirm-success-message,
+.propfirm-error-message {
+  all: initial;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Reset específico para el icono flotante */
+.propfirm-floating-icon {
+  all: unset !important;
+  position: fixed !important;
+  top: 50vh;  /* Default - can be overridden by inline style */
+  right: 0px !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) translateX(80px) !important;
+  z-index: 2147483646 !important;
+  cursor: grab !important;
+  opacity: 0 !important;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  box-sizing: content-box !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+
+/* When dragging, disable transitions for smooth movement */
+.propfirm-floating-icon.propfirm-dragging {
+  transition: none !important;
+  cursor: grabbing !important;
+  transform: translateY(-50%) scale(1.05) !important;
+}
+
+/* Copy toast notification */
+.propfirm-copy-toast {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  background: #1a1a1a !important;
+  border: 1px solid #00E5A0 !important;
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  z-index: 2147483647 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  opacity: 0 !important;
+  transform: translateY(20px) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+.propfirm-copy-toast.propfirm-toast-visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+.propfirm-toast-icon {
+  width: 24px !important;
+  height: 24px !important;
+  background: rgba(0, 229, 160, 0.15) !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.propfirm-toast-text {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.propfirm-toast-text strong {
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+.propfirm-toast-text span {
+  color: #00E5A0 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  font-family: monospace !important;
+}
+
+/* Drag handle indicator */
+.propfirm-floating-icon::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.3) 0px,
+    rgba(255, 255, 255, 0.3) 2px,
+    transparent 2px,
+    transparent 5px
+  );
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.propfirm-floating-icon:hover::before {
+  opacity: 1;
+}
+
+/* ============================================
+   CHECKOUT TRACKING STATUS INDICATOR
+   ============================================ */
+
+.propfirm-checkout-tracker {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  background: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  border-radius: 16px !important;
+  padding: 16px 20px !important;
+  z-index: 2147483646 !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  min-width: 280px !important;
+  max-width: 340px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  opacity: 0 !important;
+  transform: translateY(20px) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.propfirm-checkout-tracker.visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+.propfirm-checkout-tracker.success {
+  border-color: #00E5A0 !important;
+}
+
+.propfirm-checkout-tracker.warning {
+  border-color: #ff9800 !important;
+}
+
+.propfirm-checkout-tracker.error {
+  border-color: #ff5252 !important;
+}
+
+.propfirm-tracker-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+.propfirm-tracker-logo {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.propfirm-tracker-logo img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.propfirm-tracker-title {
+  flex: 1 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #fff !important;
+}
+
+.propfirm-tracker-close {
+  background: transparent !important;
+  border: none !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  cursor: pointer !important;
+  padding: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: color 0.2s !important;
+}
+
+.propfirm-tracker-close:hover {
+  color: #fff !important;
+}
+
+.propfirm-tracker-status {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 12px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-radius: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+.propfirm-tracker-spinner {
+  width: 18px !important;
+  height: 18px !important;
+  border: 2px solid rgba(0, 229, 160, 0.2) !important;
+  border-top-color: #00E5A0 !important;
+  border-radius: 50% !important;
+  animation: propfirm-spin 0.8s linear infinite !important;
+}
+
+@keyframes propfirm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.propfirm-tracker-status-text {
+  flex: 1 !important;
+  font-size: 13px !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.propfirm-tracker-status.success .propfirm-tracker-spinner {
+  display: none !important;
+}
+
+.propfirm-tracker-status.success::before {
+  content: '✓' !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  background: #00E5A0 !important;
+  color: #000 !important;
+  border-radius: 50% !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+}
+
+.propfirm-tracker-status.warning .propfirm-tracker-spinner {
+  border-top-color: #ff9800 !important;
+  border-color: rgba(255, 152, 0, 0.2) !important;
+  border-top-color: #ff9800 !important;
+}
+
+.propfirm-tracker-status.error .propfirm-tracker-spinner {
+  display: none !important;
+}
+
+.propfirm-tracker-status.error::before {
+  content: '!' !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  background: #ff5252 !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+}
+
+/* Waiting for order confirmation state */
+.propfirm-tracker-status.waiting-order .propfirm-tracker-spinner {
+  border-color: rgba(0, 229, 160, 0.2) !important;
+  border-top-color: #00E5A0 !important;
+}
+
+/* Order confirmed state */
+.propfirm-tracker-status.order-confirmed .propfirm-tracker-spinner {
+  display: none !important;
+}
+
+.propfirm-tracker-status.order-confirmed::before {
+  content: '✓' !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  background: #00E5A0 !important;
+  color: #000 !important;
+  border-radius: 50% !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+}
+
+.propfirm-tracker-checklist {
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.propfirm-tracker-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 6px 0 !important;
+  font-size: 12px !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.propfirm-tracker-item:last-child {
+  border-bottom: none !important;
+}
+
+.propfirm-tracker-item.captured {
+  color: #00E5A0 !important;
+}
+
+.propfirm-tracker-item.pending {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.propfirm-tracker-item.waiting-purchase {
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-style: italic !important;
+}
+
+.propfirm-tracker-item.waiting-purchase .propfirm-tracker-item-icon::before {
+  content: '⏳' !important;
+  font-size: 10px !important;
+}
+
+.propfirm-tracker-item-icon {
+  width: 14px !important;
+  height: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10px !important;
+}
+
+.propfirm-tracker-item.captured .propfirm-tracker-item-icon::before {
+  content: '✓' !important;
+}
+
+.propfirm-tracker-item.pending .propfirm-tracker-item-icon::before {
+  content: '○' !important;
+}
+
+.propfirm-tracker-warning {
+  margin-top: 12px !important;
+  padding: 10px 12px !important;
+  background: rgba(255, 152, 0, 0.1) !important;
+  border: 1px solid rgba(255, 152, 0, 0.3) !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  color: #ff9800 !important;
+  line-height: 1.4 !important;
+}
+
+.propfirm-tracker-success {
+  margin-top: 12px !important;
+  padding: 10px 12px !important;
+  background: rgba(0, 229, 160, 0.1) !important;
+  border: 1px solid rgba(0, 229, 160, 0.3) !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  color: #00E5A0 !important;
+  line-height: 1.4 !important;
+  text-align: center !important;
+}
+
+.propfirm-tracker-error {
+  margin-top: 12px !important;
+  padding: 10px 12px !important;
+  background: rgba(255, 82, 82, 0.1) !important;
+  border: 1px solid rgba(255, 82, 82, 0.3) !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  color: #ff5252 !important;
+  line-height: 1.4 !important;
+}
+
+.propfirm-tracker-retry {
+  margin-top: 10px !important;
+  width: 100% !important;
+  padding: 10px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  color: #fff !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+}
+
+.propfirm-tracker-retry:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Auth Warning in Checkout Tracker */
+.propfirm-tracker-auth-warning {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 12px 14px !important;
+  background: rgba(255, 152, 0, 0.15) !important;
+  border: 1px solid rgba(255, 152, 0, 0.4) !important;
+  border-radius: 10px !important;
+  margin-bottom: 12px !important;
+  animation: propfirm-auth-warning-pulse 2s ease-in-out infinite !important;
+}
+
+.propfirm-tracker-auth-warning.hiding {
+  opacity: 0 !important;
+  transform: translateY(-10px) !important;
+  transition: all 0.3s ease !important;
+}
+
+@keyframes propfirm-auth-warning-pulse {
+  0%, 100% { border-color: rgba(255, 152, 0, 0.4); }
+  50% { border-color: rgba(255, 152, 0, 0.8); }
+}
+
+.propfirm-auth-warning-icon {
+  font-size: 20px !important;
+  flex-shrink: 0 !important;
+}
+
+.propfirm-auth-warning-text {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  flex: 1 !important;
+}
+
+.propfirm-auth-warning-text strong {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #ff9800 !important;
+}
+
+.propfirm-auth-warning-text span {
+  font-size: 11px !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.propfirm-auth-login-btn {
+  padding: 6px 12px !important;
+  background: #ff9800 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  color: #000 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.propfirm-auth-login-btn:hover {
+  background: #ffb74d !important;
+  transform: scale(1.05) !important;
+}
+
+.propfirm-floating-icon *,
+.propfirm-honey-popup *,
+.propfirm-codes-popup * {
+  box-sizing: border-box;
+}
+
+/* Checkout Reminder Popup */
+#propfirm-checkout-reminder {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 2147483646 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.propfirm-reminder-overlay {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: rgba(0, 0, 0, 0) !important;
+  backdrop-filter: blur(0px) !important;
+  -webkit-backdrop-filter: blur(0px) !important;
+  pointer-events: all !important;
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.propfirm-reminder-popup {
+  position: relative !important;
+  background: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  max-width: 400px !important;
+  width: 90% !important;
+  pointer-events: all !important;
+  transform: scale(0.7) translateY(50px) rotateX(15deg) !important;
+  opacity: 0;
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
+  filter: blur(3px) !important;
+}
+
+.propfirm-reminder-visible .propfirm-reminder-overlay {
+  opacity: 1 !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+}
+
+.propfirm-reminder-visible .propfirm-reminder-popup {
+  transform: scale(1) translateY(0) rotateX(0deg) !important;
+  opacity: 1 !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5) !important;
+  filter: blur(0px) !important;
+}
+
+/* Animaciones de salida mejoradas */
+.propfirm-honey-popup.propfirm-popup-exiting {
+  opacity: 0 !important;
+  transition: opacity 0.28s cubic-bezier(0.4, 0.0, 1, 1) !important;
+}
+
+.propfirm-honey-popup.propfirm-popup-exiting .propfirm-popup-container {
+  transform: translate(-50%, -50%) scale(0.95) translateY(-10px) !important;
+  opacity: 0 !important;
+  filter: blur(1px) !important;
+  transition: all 0.28s cubic-bezier(0.4, 0.0, 1, 1) !important;
+}
+
+.propfirm-honey-popup.propfirm-popup-exiting .propfirm-popup-overlay {
+  background: rgba(0, 0, 0, 0) !important;
+  backdrop-filter: blur(0px) !important;
+  -webkit-backdrop-filter: blur(0px) !important;
+  transition: all 0.28s cubic-bezier(0.4, 0.0, 1, 1) !important;
+}
+
+#propfirm-checkout-reminder.propfirm-reminder-exiting .propfirm-reminder-popup {
+  transform: scale(0.8) translateY(30px) rotateX(-10deg) !important;
+  opacity: 0 !important;
+  filter: blur(2px) !important;
+  transition: all 0.4s cubic-bezier(0.55, 0.055, 0.675, 0.19) !important;
+}
+
+#propfirm-checkout-reminder.propfirm-reminder-exiting .propfirm-reminder-overlay {
+  background: rgba(0, 0, 0, 0) !important;
+  backdrop-filter: blur(0px) !important;
+  -webkit-backdrop-filter: blur(0px) !important;
+}
+
+.propfirm-reminder-header {
+  display: flex !important;
+  align-items: center !important;
+  margin-bottom: 20px !important;
+  gap: 12px !important;
+}
+
+.propfirm-reminder-logo img {
+  border-radius: 6px !important;  
+  width: 50px !important;
+  height: 50px !important;
+  object-fit: contain !important;
+  padding: 3px !important;
+}
+
+.propfirm-reminder-title {
+  flex: 1 !important;
+}
+
+.propfirm-reminder-title h3 {
+  color: #ffffff !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  margin: 0 0 4px 0 !important;
+  line-height: 1.3 !important;
+}
+
+.propfirm-reminder-title p {
+  color: #888 !important;
+  font-size: 12px !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.propfirm-reminder-close {
+  background: none !important;
+  border: none !important;
+  color: #888 !important;
+  cursor: pointer !important;
+  padding: 4px !important;
+  border-radius: 4px !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.propfirm-reminder-close:hover {
+  background: #333 !important;
+  color: #ffffff !important;
+}
+
+.propfirm-reminder-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+.propfirm-reminder-actions {
+  display: flex !important;
+  gap: 12px !important;
+}
+
+.propfirm-reminder-copy {
+  width: 100% !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 14px 20px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  text-decoration: none !important;
+  color: inherit !important;
+}
+
+.propfirm-reminder-copy {
+  background: #00E5A0 !important;
+  color: #000000 !important;
+  border: none !important;
+}
+
+.propfirm-reminder-copy:hover {
+  background: #00cc88 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 229, 160, 0.3) !important;
+}
+
+.propfirm-reminder-footer {
+  padding: 12px 16px !important;
+  margin-top: 10px !important;
+}
+
+.propfirm-reminder-footer p {
+  margin: 0 !important;
+  font-size: 11px !important;
+  color: #666666 !important;
+  text-align: center !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  line-height: 1.4 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.propfirm-reminder-footer svg {
+  color: #666666 !important;
+  fill: #666666 !important;
+  margin-right: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+.propfirm-reminder-gif {
+  margin: 16px 0 8px 0 !important;
+  text-align: center !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.propfirm-reminder-gif img {
+  width: 100% !important;
+  max-height: 120px !important;
+  height: auto !important;
+  border-radius: 6px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  object-fit: cover !important;
+}
+
+/* Reminder popup specific styles for product info */
+.propfirm-reminder-popup .propfirm-product-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  background: #111111 !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.propfirm-reminder-popup .propfirm-product-image {
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  box-shadow: rgba(0, 229, 160, 0.2) 0px 4px 12px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.propfirm-reminder-popup .propfirm-logo {
+  width: 40px !important;
+  height: 40px !important;
+  object-fit: contain !important;
+  border-radius: 6px !important;
+}
+
+.propfirm-reminder-popup .propfirm-discount-badge {
+  color: rgb(0, 0, 0);
+  font-size: 13px;
+  font-weight: 700;
+  position: absolute;
+  top: 0px;
+  right: -255px;
+  box-shadow: rgba(0, 0, 0, 0.3) 0px 2px 8px;
+  display: flex;
+  align-items: center;
+  background: rgb(0, 229, 160);
+  padding: 3px 9px;
+  border-radius: 6px;
+  gap: 4px;
+}
+
+.propfirm-reminder-popup .propfirm-discount-badge .discount-icon svg {
+  width: 10px !important;
+  height: 10px !important;
+  fill: #000000 !important;
+}
+
+.propfirm-reminder-popup .propfirm-product-details {
+  flex: 1 !important;
+  color: #333333 !important;
+}
+
+.propfirm-reminder-popup .propfirm-product-details h3 {
+  margin: 0 0 6px 0 !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: white !important;
+  line-height: 1.3 !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.propfirm-reminder-popup .propfirm-product-details p {
+  margin: 0 !important;
+  font-size: 13px !important;
+  color: #666666 !important;
+  line-height: 1.4 !important;
+  font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Notification animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+ 

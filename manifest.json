@@ -1,0 +1,137 @@
+{
+  "manifest_version": 3,
+  "name": "PropFirm Compare Rewards",
+  "version": "2.3.8",
+  "description": "Auto-apply discount codes for prop trading firms & earn rewards. Affiliate disclosure: may earn commissions from partner links.",
+  
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "notifications"
+  ],
+  
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*",
+    "https://app.fundednext.com/*",
+    "https://fundednext.com/*",
+    "https://lucidtrading.com/*",
+    "https://myfundedfutures.com/*",
+    "https://apextraderfunding.com/*",
+    "https://tradeify.co/*",
+    "https://fundingticks.com/*",
+    "https://takeprofittrader.com/*",
+    "https://alpha-futures.com/*",
+    "https://app.alpha-futures.com/*",
+    "https://*.safecharge.com/*",
+    "https://*.nuvei.com/*",
+    "https://propfirm.compare/*",
+    "https://prop-firm-compare-env-develop-junos-projects-17951c31.vercel.app/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["*://*.fundednext.com/*", "*://fundednext.com/*"],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-autofill.js",
+        "content-fundednext.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.myfundedfutures.com/*", "*://myfundedfutures.com/*"],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-autofill.js",
+        "content-myfundedfutures.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.takeprofittrader.com/*", "*://takeprofittrader.com/*"],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-autofill.js",
+        "content-takeprofittrader.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://*.alpha-futures.com/*", 
+        "*://alpha-futures.com/*",
+        "*://*.safecharge.com/*",
+        "*://safecharge.com/*",
+        "*://*.nuvei.com/*",
+        "*://nuvei.com/*"
+      ],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-alphafutures.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://*.tradeify.co/*",
+        "*://tradeify.co/*",
+        "*://*.lucidtrading.com/*",
+        "*://lucidtrading.com/*",
+        "*://*.fundingticks.com/*",
+        "*://fundingticks.com/*",
+        "*://*.apextraderfunding.com/*",
+        "*://apextraderfunding.com/*"
+      ],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-autofill.js",
+        "debug-tracker.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://propfirm.compare/extension-auth*",
+        "https://prop-firm-compare-env-develop-junos-projects-17951c31.vercel.app/extension-auth*"
+      ],
+      "js": ["auth-listener.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PropFirm Compare Rewards",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png", "checkout-config.json", "config/purchase-tracking.json", "gifs/*.gif", "onboarding/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+} 
