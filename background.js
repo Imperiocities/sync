@@ -1778,7 +1778,13 @@ class PurchaseEngine {
       
       // Order number - filled on success page
       order_number: purchaseData.order_number || null,
-      
+
+      // TPT-specific fields (forwarded from content script)
+      platform: purchaseData.platform || null,
+      transaction_id: purchaseData.transaction_id || null,
+      purchase_type: purchaseData.purchase_type || null,
+      _enriched: purchaseData._enriched || null,
+
       // Status tracking
       status: 'pending'
     });
@@ -1885,6 +1891,21 @@ class PurchaseEngine {
     // Merge data (creates new object, doesn't mutate)
     const finalData = this.mergeData(match, successData);
     finalData.order_number = orderNumber;
+
+    // TPT enrichment: success message carries the final (most complete) _enriched envelope.
+    // Force-overlay these so the API payload always has the latest data.
+    if (successData._enriched) {
+      finalData._enriched = successData._enriched;
+    }
+    if (successData.purchase_type) {
+      finalData.purchase_type = successData.purchase_type;
+    }
+    if (successData.platform) {
+      finalData.platform = successData.platform;
+    }
+    if (successData.transaction_id) {
+      finalData.transaction_id = successData.transaction_id;
+    }
     
     // Update status (replace with new frozen object)
     const idx = this.queue.findIndex(p => p.capture_id === match.capture_id);
@@ -1967,7 +1988,13 @@ class PurchaseEngine {
       captured_at: data.captured_at,
       timestamp: new Date().toISOString(),
       extension_version: chrome.runtime.getManifest().version,
-      source: 'immutable-queue-engine'
+      source: 'immutable-queue-engine',
+
+      // TPT-specific fields
+      platform: data.platform || null,
+      transaction_id: data.transaction_id || null,
+      purchase_type: data.purchase_type || null,
+      _enriched: data._enriched || null
     };
     
     debugLog('[ENGINE] Submitting:', captureId, payload.order_number || '(no order#)');

@@ -57,6 +57,12 @@
     },
     {
       "matches": ["*://*.takeprofittrader.com/*", "*://takeprofittrader.com/*"],
+      "js": ["tpt-net-intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.takeprofittrader.com/*", "*://takeprofittrader.com/*"],
       "js": [
         "shared/tracker-ui.js",
         "content-autofill.js",
