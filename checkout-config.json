@@ -1,25 +1,16 @@
 {
   "lucidtrading.com": {
     "name": "Lucid Trading",
+    "disabled": true,
+    "disabledReason": "Handled by lucid-net-intercept.js (auto-applies coupon via WooCommerce AJAX)",
     "checkoutDetection": {
       "type": "url",
       "pattern": "/checkout"
     },
-    "autoFillSequence": [
-      {
-        "action": "fill",
-        "selector": "input[name='coupon_code']",
-        "value": "LAB"
-      },
-      {
-        "action": "click",
-        "selector": "button#apply_coupon_button"
-      }
-    ]
+    "autoFillSequence": []
   },
   "tradeify.co": {
     "name": "Tradeify",
-    "disabled": true,
     "skipValidation": true,
     "checkoutDetection": {
       "type": "url",
@@ -28,8 +19,7 @@
     "autoFillSequence": [
       {
         "action": "click",
-        "selector": "button",
-        "content": "Add promo code",
+        "selector": ".promo_btn, button[class*='promo']",
         "optional": true
       },
       {
@@ -37,9 +27,15 @@
         "duration": 500
       },
       {
+        "action": "waitForVisible",
+        "selector": "input[placeholder*='promo' i]",
+        "maxWait": 3000,
+        "optional": true
+      },
+      {
         "action": "fill",
-        "selector": "input[placeholder='Enter promo code']",
-        "value": "MTZM2Q5W"
+        "selector": "input[placeholder*='promo' i]",
+        "value": "LAB"
       },
       {
         "action": "wait",
@@ -48,13 +44,14 @@
       {
         "action": "click",
         "selector": "button",
-        "content": "Apply"
+        "content": "Apply",
+        "waitForEnabled": true,
+        "maxWait": 3000
       }
     ]
   },
   "app-f.tradeify.co": {
     "name": "Tradeify",
-    "disabled": true,
     "skipValidation": true,
     "checkoutDetection": {
       "type": "url",
@@ -63,8 +60,7 @@
     "autoFillSequence": [
       {
         "action": "click",
-        "selector": "button",
-        "content": "Add promo code",
+        "selector": ".promo_btn, button[class*='promo']",
         "optional": true
       },
       {
@@ -72,9 +68,15 @@
         "duration": 500
       },
       {
+        "action": "waitForVisible",
+        "selector": "input[placeholder*='promo' i]",
+        "maxWait": 3000,
+        "optional": true
+      },
+      {
         "action": "fill",
-        "selector": "input[placeholder='Enter promo code']",
-        "value": "MTZM2Q5W"
+        "selector": "input[placeholder*='promo' i]",
+        "value": "LAB"
       },
       {
         "action": "wait",
@@ -83,7 +85,9 @@
       {
         "action": "click",
         "selector": "button",
-        "content": "Apply"
+        "content": "Apply",
+        "waitForEnabled": true,
+        "maxWait": 3000
       }
     ]
   },

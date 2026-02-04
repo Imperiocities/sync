@@ -1,6 +1,35 @@
 # Changelog - PropFirm Compare Extension
 
-## 🚀 Version 3.2.0 - Floating Icon & Popup (Latest)
+## 🚀 Version 2.3.9 - FundedNext Network Tracking (Latest)
+
+### ✨ **FundedNext Improvements (content-fundednext.js v2.0):**
+- ✅ **Network interception** via `fn-net-intercept.js` (MAIN world script)
+- ✅ **Real-time price updates** from `calculate-challenge-price` API
+- ✅ **Coupon validation** from `coupon-check` API with accurate discount amounts
+- ✅ **Order ID capture** (`gateway_order_id`) from `product-order` API on payment
+- ✅ **Plan ID filtering** - ignores stale API responses from previous products
+- ✅ **Network data priority** - API data takes precedence over localStorage for 30s
+
+### 📊 **Data Now Tracked for FundedNext:**
+| Field | Source |
+|-------|--------|
+| `product_name` | Network: calculate-challenge-price |
+| `original_price` | Network: calculate-challenge-price |
+| `final_price` | Network: coupon-check |
+| `discount_amount` | Network: coupon-check |
+| `coupon_code` | localStorage |
+| `email` | localStorage |
+| `order_number` | Network: product-order (gateway_order_id) |
+| `transaction_id` | Network: product-order (client_secret) |
+
+### 🐛 **Bug Fixes:**
+- Fixed tracker showing stale product data when switching products
+- Fixed MutationObserver error when document.body not ready
+- Fixed race condition where old API responses overwrote new data
+
+---
+
+## 🚀 Version 3.2.0 - Floating Icon & Popup
 
 ### ✨ **Nuevas características principales:**
 

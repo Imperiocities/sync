@@ -431,22 +431,90 @@
 
     _manualDownload() {
       // Grab live data from the content script's debug interface
-      const debug = window.tptDebug || window.PropFirmDebugTracker;
       const liveData = {};
 
+      // TakeProfitTrader debug data
       if (window.tptDebug) {
         try {
-          liveData.purchaseData = window.tptDebug.data();
-          liveData.captureStatus = window.tptDebug.status();
-          liveData.eventTimeline = window.tptDebug.events();
-          liveData.networkLog = window.tptDebug.network();
-          liveData.priceHistory = window.tptDebug.prices();
-          liveData.errorLog = window.tptDebug.errors();
-          liveData.session = window.tptDebug.session();
-          liveData.snapshot = window.tptDebug.snapshot();
+          liveData.tpt = {
+            purchaseData: window.tptDebug.data(),
+            captureStatus: window.tptDebug.status(),
+            eventTimeline: window.tptDebug.events(),
+            networkLog: window.tptDebug.network(),
+            priceHistory: window.tptDebug.prices(),
+            errorLog: window.tptDebug.errors(),
+            session: window.tptDebug.session(),
+            snapshot: window.tptDebug.snapshot()
+          };
         } catch (e) {
-          liveData._debugError = e.message;
+          liveData.tpt = { _debugError: e.message };
         }
+      }
+
+      // FundedNext debug data
+      if (window.fnQueueDebug) {
+        try {
+          liveData.fundednext = {
+            extractedData: window.fnQueueDebug.extract(),
+            networkData: window.fnQueueDebug.network(),
+            networkLog: window.fnQueueDebug.networkLog()
+          };
+        } catch (e) {
+          liveData.fundednext = { _debugError: e.message };
+        }
+      }
+
+      // MyFundedFutures debug data
+      if (window.mffDebug) {
+        try {
+          liveData.myfundedfutures = {
+            extractedData: window.mffDebug.extract(),
+            couponStatus: window.mffDebug.coupon(),
+            pageStatus: window.mffDebug.status()
+          };
+        } catch (e) {
+          liveData.myfundedfutures = { _debugError: e.message };
+        }
+      }
+
+      // Tradeify debug data
+      if (window.tradeifyDebug) {
+        try {
+          liveData.tradeify = {
+            extractedData: window.tradeifyDebug.extract(),
+            networkData: window.tradeifyDebug.network(),
+            pageStatus: window.tradeifyDebug.status()
+          };
+        } catch (e) {
+          liveData.tradeify = { _debugError: e.message };
+        }
+      }
+
+      // Network intercept data (if available)
+      if (window.__pfcFnNet) {
+        try {
+          liveData.fnNetworkLog = window.__pfcFnNet.log.slice(-50);
+        } catch (e) {}
+      }
+      if (window.__pfcMffNet) {
+        try {
+          liveData.mffNetworkLog = window.__pfcMffNet.log.slice(-50);
+        } catch (e) {}
+      }
+      if (window.__pfcTradeifyNet) {
+        try {
+          liveData.tradeifyNetworkLog = window.__pfcTradeifyNet.log.slice(-50);
+        } catch (e) {}
+      }
+      if (window.__pfcAfNet) {
+        try {
+          liveData.alphaFuturesNetworkLog = window.__pfcAfNet.log.slice(-50);
+        } catch (e) {}
+      }
+      if (window.__pfcLucidNet) {
+        try {
+          liveData.lucidTradingNetworkLog = window.__pfcLucidNet.log.slice(-50);
+        } catch (e) {}
       }
 
       const exportData = {

@@ -17,9 +17,11 @@
     "https://app.fundednext.com/*",
     "https://fundednext.com/*",
     "https://lucidtrading.com/*",
+    "https://*.lucidtrading.com/*",
     "https://myfundedfutures.com/*",
     "https://apextraderfunding.com/*",
     "https://tradeify.co/*",
+    "https://*.tradeify.co/*",
     "https://fundingticks.com/*",
     "https://takeprofittrader.com/*",
     "https://alpha-futures.com/*",
@@ -37,6 +39,12 @@
   "content_scripts": [
     {
       "matches": ["*://*.fundednext.com/*", "*://fundednext.com/*"],
+      "js": ["fn-net-intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.fundednext.com/*", "*://fundednext.com/*"],
       "js": [
         "shared/tracker-ui.js",
         "content-autofill.js",
@@ -44,6 +52,12 @@
       ],
       "css": ["content.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.myfundedfutures.com/*", "*://myfundedfutures.com/*"],
+      "js": ["mff-net-intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     },
     {
       "matches": ["*://*.myfundedfutures.com/*", "*://myfundedfutures.com/*"],
@@ -73,7 +87,16 @@
     },
     {
       "matches": [
-        "*://*.alpha-futures.com/*", 
+        "*://*.alpha-futures.com/*",
+        "*://alpha-futures.com/*"
+      ],
+      "js": ["af-net-intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*.alpha-futures.com/*",
         "*://alpha-futures.com/*",
         "*://*.safecharge.com/*",
         "*://safecharge.com/*",
@@ -88,11 +111,45 @@
       "run_at": "document_start"
     },
     {
+      "matches": ["*://*.tradeify.co/*", "*://tradeify.co/*"],
+      "js": ["tradeify-net-intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.tradeify.co/*", "*://tradeify.co/*"],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-autofill.js",
+        "content-tradeify.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": [
-        "*://*.tradeify.co/*",
-        "*://tradeify.co/*",
         "*://*.lucidtrading.com/*",
-        "*://lucidtrading.com/*",
+        "*://lucidtrading.com/*"
+      ],
+      "js": ["lucid-net-intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*.lucidtrading.com/*",
+        "*://lucidtrading.com/*"
+      ],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-autofill.js",
+        "content-lucidtrading.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
         "*://*.fundingticks.com/*",
         "*://fundingticks.com/*",
         "*://*.apextraderfunding.com/*",

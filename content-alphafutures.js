@@ -1,25 +1,31 @@
 /**
- * Alpha Futures Purchase Adapter v1.0
- * 
+ * Alpha Futures Purchase Adapter v2.0
+ *
  * Captures purchase data from Alpha Futures (app.alpha-futures.com) checkout flow.
- * 
+ *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │                           DATA CAPTURE SOURCES                              │
  * ├─────────────────────────────────────────────────────────────────────────────┤
  * │ Field                 │ Source                                              │
  * ├───────────────────────┼─────────────────────────────────────────────────────┤
- * │ email                 │ Safecharge URL → email= param                       │
- * │ coupon_code           │ Backend API URL → coupon= param                     │
+ * │ email                 │ Network: /user/billing/address/ API                 │
+ * │ customer_name         │ Network: /user/billing/address/ API                 │
+ * │ phone                 │ Network: /user/billing/address/ API                 │
+ * │ user_id (profile)     │ Network: /user/billing/address/ API                 │
+ * │ coupon_code           │ Network: /payment/final-price/ API                  │
+ * │ original_price        │ Network: /payment/final-price/ API (actual_price)   │
+ * │ final_price           │ Network: /payment/final-price/ API                  │
+ * │ discount              │ Network: /payment/final-price/ API                  │
  * │ account_size          │ Safecharge URL → item_name_1= param                 │
  * │ account_type          │ Backend API URL → payment_type= param               │
- * │ original_price        │ Console log → sortedNumbers → price field           │
- * │ final_price           │ Safecharge URL → total_amount= param                │
  * │ transaction_id        │ Success URL → TransactionID= param                  │
- * │ user_id               │ Safecharge URL → userid= param                      │
  * └───────────────────────┴─────────────────────────────────────────────────────┘
- * 
+ *
  * Success Detection:
  * - URL matches: app.alpha-futures.com/evaluation/payment/success/?TransactionID=*
+ *
+ * Auto-Coupon:
+ * - Network intercept automatically calls final-price API with LAB coupon
  */
 
 (function() {
@@ -217,17 +223,139 @@
     email: null,
     customer_name: null,
     user_id: null,
+    phone: null,
     product_name: null,
     account_size: null,
     account_type: null,
     original_price: null,
     final_price: null,
     discount_percent: null,
+    discount_amount: null,
     coupon_code: null,
     transaction_id: null,
     platform: null
   };
-  
+
+  // Network data from intercept
+  const networkData = {
+    billingAddress: null,
+    finalPrice: null,
+    lastNetworkUpdate: 0,
+    network_log: []
+  };
+
+  // Listen for network events from intercept script
+  document.addEventListener('__pfc_af_net', function(e) {
+    try {
+      const detail = typeof e.detail === 'string' ? JSON.parse(e.detail) : e.detail;
+      if (!detail || !detail.type || !detail.data) return;
+
+      const d = detail.data;
+
+      // Log network requests
+      if (detail.type === 'fetch' || detail.type === 'xhr') {
+        networkData.network_log.push({
+          type: detail.type,
+          url: d.url,
+          method: d.method,
+          status: d.status,
+          time: new Date().toISOString()
+        });
+        if (networkData.network_log.length > 100) {
+          networkData.network_log.splice(0, networkData.network_log.length - 100);
+        }
+
+        if (d.responseData) {
+          processNetworkResponse(d.url, d.responseData);
+        }
+      }
+
+      // Handle coupon applied event
+      if (detail.type === 'coupon_applied' && d.response) {
+        originalLog.call(console, '[AlphaFutures] Coupon applied via network:', d.response);
+        if (d.response.coupon_applied) {
+          purchaseData.coupon_code = d.response.coupon_applied;
+        }
+        if (d.response.actual_price) {
+          purchaseData.original_price = parseFloat(d.response.actual_price);
+        }
+        if (d.response.final_price) {
+          purchaseData.final_price = parseFloat(d.response.final_price);
+        }
+        if (d.response.discount) {
+          purchaseData.discount_amount = parseFloat(d.response.discount);
+        }
+        networkData.lastNetworkUpdate = Date.now();
+        updateTrackerUI();
+      }
+    } catch (err) {
+      originalLog.call(console, '[AlphaFutures] Error processing network event:', err);
+    }
+  });
+
+  function processNetworkResponse(url, data) {
+    if (!data) return;
+    const urlLower = url.toLowerCase();
+
+    // /user/billing/address/ - user profile data
+    if (urlLower.includes('/user/billing/address')) {
+      originalLog.call(console, '[AlphaFutures] Processing billing address response');
+      // Response is an array
+      const address = Array.isArray(data) ? data[0] : data;
+      if (address) {
+        networkData.billingAddress = address;
+        if (address.email && !purchaseData.email) {
+          purchaseData.email = address.email;
+          originalLog.call(console, '[AlphaFutures] Email from API:', purchaseData.email);
+        }
+        if (address.first_name || address.last_name) {
+          purchaseData.customer_name = [address.first_name, address.last_name].filter(Boolean).join(' ');
+          originalLog.call(console, '[AlphaFutures] Name from API:', purchaseData.customer_name);
+        }
+        if (address.number && !purchaseData.phone) {
+          purchaseData.phone = address.number;
+          originalLog.call(console, '[AlphaFutures] Phone from API:', purchaseData.phone);
+        }
+        if (address.profile && !purchaseData.user_id) {
+          purchaseData.user_id = String(address.profile);
+          originalLog.call(console, '[AlphaFutures] User ID (profile) from API:', purchaseData.user_id);
+        }
+        networkData.lastNetworkUpdate = Date.now();
+        updateTrackerUI();
+      }
+      return;
+    }
+
+    // /payment/final-price/ - pricing and coupon data
+    if (urlLower.includes('/payment/final-price')) {
+      originalLog.call(console, '[AlphaFutures] Processing final-price response:', data);
+      networkData.finalPrice = data;
+      if (data.coupon_applied) {
+        purchaseData.coupon_code = data.coupon_applied;
+        originalLog.call(console, '[AlphaFutures] Coupon from API:', purchaseData.coupon_code);
+      }
+      if (data.actual_price) {
+        purchaseData.original_price = parseFloat(data.actual_price);
+        originalLog.call(console, '[AlphaFutures] Original price from API:', purchaseData.original_price);
+      }
+      if (data.final_price) {
+        purchaseData.final_price = parseFloat(data.final_price);
+        originalLog.call(console, '[AlphaFutures] Final price from API:', purchaseData.final_price);
+      }
+      if (data.discount) {
+        purchaseData.discount_amount = parseFloat(data.discount);
+        // Calculate discount percent
+        if (purchaseData.original_price && purchaseData.original_price > 0) {
+          purchaseData.discount_percent = Math.round((purchaseData.discount_amount / purchaseData.original_price) * 100);
+        }
+        originalLog.call(console, '[AlphaFutures] Discount from API:', purchaseData.discount_amount, '(' + purchaseData.discount_percent + '%)');
+      }
+      networkData.lastNetworkUpdate = Date.now();
+      updateTrackerUI();
+      return;
+    }
+  }
+
   // Base prices from console log interception
   let basePrices = {};
   
@@ -501,12 +629,13 @@
     tracker = new window.TrackerUI({
       partner: PARTNER,
       partnerName: PARTNER_NAME,
-      fields: ['coupon', 'product', 'price', 'email', 'order_id'],
+      fields: ['coupon', 'product', 'price', 'email', 'user_id', 'order_id'],
       fieldLabels: {
         coupon: 'Coupon Code',
         product: 'Account',
         price: 'Price',
         email: 'Email',
+        user_id: 'Profile ID',
         order_id: 'Transaction ID'
       },
       afterPurchaseFields: ['order_id']
@@ -552,11 +681,15 @@
     if (purchaseData.coupon_code) {
       t.updateField('coupon', purchaseData.coupon_code);
     }
-    
+
     if (purchaseData.email) {
       t.updateField('email', purchaseData.email);
     }
-    
+
+    if (purchaseData.user_id) {
+      t.updateField('user_id', purchaseData.user_id);
+    }
+
     if (purchaseData.transaction_id) {
       t.updateField('order_id', purchaseData.transaction_id);
     }

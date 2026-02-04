@@ -1,13 +1,15 @@
 /**
- * MFF Content Script
+ * MFF Content Script v2.0
  * Handles checkout capture and success detection for MyFundedFutures
- * 
+ *
  * KEY FIXES (from CURSOR_MFF_ADAPTER_v2.md):
  * - MutationObserver watches for plan selection changes
  * - Re-extracts when user changes plan (React app updates)
  * - DOM-based extraction finds "Review your order" container (not regex on full page)
  * - Debounced updates (300ms) to let React finish rendering
- * 
+ *
+ * v2.0: Added network interception for product/price data from API
+ *
  * KEY BEHAVIORS:
  * - Same URL (/challenge) for checkout AND success - detect by DOM content
  * - Coupon code NOT shown on success page - must capture on checkout
@@ -16,23 +18,133 @@
 
 (function() {
   'use strict';
-  
+
   // Prevent double initialization
   if (window.__mffContentLoaded) return;
   window.__mffContentLoaded = true;
-  
+
   const PARTNER = 'myfundedfutures';
   const PARTNER_NAME = 'MyFundedFutures';
   const REQUIRED_COUPON = 'LAB';
   const DEBUG = true;
   const STORAGE_KEY = 'mff_validated_coupon';
-  
+  const VERSION = 'v2.0';
+
   // Debounce timer for MutationObserver
   let extractionTimer = null;
   let lastExtractedDataStr = null;
-  
+
   function log(...args) {
     if (DEBUG) console.log('[MFF]', ...args);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // NETWORK DATA (captured from mff-net-intercept.js)
+  // ══════════════════════════════════════════════════════════════════════
+
+  const networkData = {
+    products: {},        // Map of price_id -> product data
+    selectedPriceId: null,
+    selectedProduct: null,
+    couponData: null,
+    lastNetworkUpdate: 0
+  };
+
+  // Listen for network events from the main world intercept script
+  document.addEventListener('__pfc_mff_net', function(e) {
+    try {
+      const detail = typeof e.detail === 'string' ? JSON.parse(e.detail) : e.detail;
+      if (!detail || !detail.type || !detail.data) return;
+
+      const d = detail.data;
+
+      // Process response data
+      if (d.responseData) {
+        processNetworkResponse(d.url, d.responseData, d.requestBody);
+      }
+    } catch (err) {
+      log('⚠️ Error processing network event:', err);
+    }
+  });
+
+  // Process network responses to extract product/pricing data
+  function processNetworkResponse(url, data, requestBody) {
+    if (!data || typeof data !== 'object') return;
+
+    const urlLower = url.toLowerCase();
+
+    // ─────────────────────────────────────────────────────────────────
+    // getBusinessProducts - Product catalog with prices
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('getbusinessproducts')) {
+      log('🔍 Processing getBusinessProducts response');
+      if (data.ok) {
+        // Parse all products and store by price_id
+        for (const category of Object.values(data.ok)) {
+          if (Array.isArray(category)) {
+            for (const product of category) {
+              if (product.price_data?.id) {
+                networkData.products[product.price_data.id] = {
+                  id: product.id,
+                  name: product.name,
+                  category: product.category,
+                  account_size: product.account_size,
+                  price: product.price_data.price,
+                  price_id: product.price_data.id
+                };
+              }
+            }
+          }
+        }
+        log('✅ Loaded', Object.keys(networkData.products).length, 'products from API');
+      }
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // getCouponCheckoutInfo - Coupon validation & selected product
+    // Request: {"couponCode":"LAB","price_id":78,"selected_processor":1}
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('getcouponcheckoutinfo')) {
+      log('🔍 Processing getCouponCheckoutInfo response');
+
+      // Extract price_id from request body
+      if (requestBody) {
+        try {
+          const req = typeof requestBody === 'string' ? JSON.parse(requestBody) : requestBody;
+          if (req.price_id) {
+            networkData.selectedPriceId = req.price_id;
+            networkData.selectedProduct = networkData.products[req.price_id] || null;
+            log('✅ Selected product price_id:', req.price_id, networkData.selectedProduct?.name);
+
+            // Update tracker with network data
+            if (networkData.selectedProduct) {
+              networkData.lastNetworkUpdate = Date.now();
+              updateTrackerData({
+                product_name: formatProductName(networkData.selectedProduct),
+                original_price: networkData.selectedProduct.price,
+                account_size: networkData.selectedProduct.account_size
+              });
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Extract coupon data from response
+      if (data.ok) {
+        networkData.couponData = data.ok;
+        log('✅ Coupon data:', data.ok.code, 'discount:', data.ok.amountOff, data.ok.typeOff);
+      }
+      return;
+    }
+  }
+
+  // Format product name nicely
+  function formatProductName(product) {
+    if (!product) return null;
+    // Format: "Flex • $50,000" or "Rapid50K • $50,000"
+    const size = product.account_size ? `$${product.account_size.toLocaleString()}` : '';
+    return `${product.name} • ${size}`;
   }
   
   // ══════════════════════════════════════════════════════════════════════
@@ -261,8 +373,9 @@
       account_size: null
     };
     
-    // Extract product name: "Pro Plan • $150,000" or "Rapid Plan • $50,000"
-    const productMatch = text.match(/((?:Rapid|Core|Pro|Express|Standard|Elite)\s*Plan)\s*[•·]\s*\$?([\d,]+)/i);
+    // Extract product name: Various formats MFF uses:
+    // "Flex • $50,000" or "Rapid Plan • $50,000" or "Pro100K" or "Flex 25k"
+    const productMatch = text.match(/((?:Rapid|Flex|Pro|Core|Express|Standard|Elite)(?:\s*Plan)?(?:\s*\d+[Kk])?)\s*[•·]\s*\$?([\d,]+)/i);
     if (productMatch) {
       const planType = productMatch[1];
       let size = parseInt(productMatch[2].replace(/,/g, ''));
@@ -358,25 +471,44 @@
   
   function extractCheckoutData() {
     const user = getUserData();
-    
+
     // DOM-based extraction - find the actual order summary container
     const orderSummary = findOrderSummaryContainer();
     const summaryData = extractFromOrderSummary(orderSummary);
-    
+
+    // Check if we have recent network data (within last 60 seconds)
+    const hasRecentNetworkData = networkData.lastNetworkUpdate &&
+      (Date.now() - networkData.lastNetworkUpdate < 60000) &&
+      networkData.selectedProduct;
+
     const data = {
       partner: PARTNER,
       email: user.email,
       customer_name: user.customer_name,
       coupon_code: getCouponCode(),
-      product_name: summaryData?.product_name || null,
-      account_size: summaryData?.account_size || null,
-      original_price: summaryData?.original_price || null,
+      // Prefer network data for product info (more reliable)
+      product_name: hasRecentNetworkData
+        ? formatProductName(networkData.selectedProduct)
+        : (summaryData?.product_name || null),
+      account_size: hasRecentNetworkData
+        ? networkData.selectedProduct.account_size
+        : (summaryData?.account_size || null),
+      original_price: hasRecentNetworkData
+        ? networkData.selectedProduct.price
+        : (summaryData?.original_price || null),
+      // Final price and discount from DOM (has coupon applied)
       final_price: summaryData?.final_price || null,
       discount_amount: summaryData?.discount_amount || null,
       order_number: null,
       checkout_url: window.location.href
     };
-    
+
+    if (hasRecentNetworkData) {
+      log('🌐 Using network data for product:', networkData.selectedProduct.name);
+    } else {
+      log('📋 Using DOM data for product');
+    }
+
     log('📊 Extracted data:', data);
     return data;
   }

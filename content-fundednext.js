@@ -1,13 +1,14 @@
 /**
- * FUNDEDNEXT CONTENT SCRIPT v1.2
+ * FUNDEDNEXT CONTENT SCRIPT v2.0
  * Queue-based capture: Captures on checkout, detects success, sends to queue engine
  * Uses shared TrackerUI to show live extraction data
- * 
+ *
  * CRITICAL DISCOVERY: localStorage('purchasePlanInfo') is CLEARED after payment!
  * Solution: Capture on checkout page (where data exists), detect success separately.
- * 
+ *
  * v1.2 FIX: Clear paymentProcessed after each purchase to allow multiple purchases
- * 
+ * v2.0: Added network interception for order/transaction IDs (similar to TPT)
+ *
  * Data Map:
  * - purchasePlanInfo.couponCode → coupon_code
  * - purchasePlanInfo.totalPrice → final_price
@@ -16,20 +17,277 @@
  * - purchasePlanInfo.plan_name → product_name
  * - user.email → email (backup)
  * - user.full_name → customer_name (backup)
+ * - Network intercept → order_number, transaction_id (NEW)
  */
 
 (function() {
   'use strict';
-  
+
   const PARTNER = 'fundednext';
   const PARTNER_NAME = 'FundedNext';
   const DEBUG = true;
-  const VERSION = 'v1.2';
+  const VERSION = 'v2.0';
   
   function log(...args) {
     if (DEBUG) console.log('[FN-Queue]', ...args);
   }
-  
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // NETWORK DATA (captured from fn-net-intercept.js)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const networkData = {
+    order_number: null,
+    transaction_id: null,
+    payment_status: null,
+    // Pricing data from network (more accurate than localStorage)
+    product_name: null,
+    original_price: null,
+    final_price: null,
+    discount_amount: null,
+    network_log: [],
+    lastNetworkUpdate: 0  // Timestamp of last network price update
+  };
+
+  // Listen for network events from the main world intercept script
+  document.addEventListener('__pfc_fn_net', function(e) {
+    try {
+      const detail = typeof e.detail === 'string' ? JSON.parse(e.detail) : e.detail;
+      if (!detail || !detail.type || !detail.data) return;
+
+      const d = detail.data;
+
+      // Log all network requests for debugging
+      if (detail.type === 'fetch' || detail.type === 'xhr') {
+        networkData.network_log.push({
+          type: detail.type,
+          url: d.url,
+          method: d.method,
+          status: d.status,
+          time: new Date().toISOString()
+        });
+        // Keep only last 100
+        if (networkData.network_log.length > 100) {
+          networkData.network_log.splice(0, networkData.network_log.length - 100);
+        }
+
+        // Process response data for order/transaction IDs
+        if (d.responseData) {
+          processNetworkResponse(d.url, d.responseData, d.requestBody);
+        }
+      }
+
+      // Handle payment callbacks from console.log
+      if (detail.type === 'console_payment') {
+        log('💳 Console payment detected:', d);
+        if (d.transactionId && !networkData.transaction_id) {
+          networkData.transaction_id = d.transactionId;
+          log('✅ Transaction ID from console:', networkData.transaction_id);
+        }
+        if (d.orderId && !networkData.order_number) {
+          networkData.order_number = d.orderId;
+          log('✅ Order ID from console:', networkData.order_number);
+        }
+        if (d.result) {
+          networkData.payment_status = d.result;
+          if (d.result === 'APPROVED' || d.result === 'success' || d.result === 'completed') {
+            log('🎉 Payment approved via console callback');
+            setTimeout(checkForSuccess, 500);
+          }
+        }
+      }
+
+      // Handle postMessage payment events (iframe processors)
+      if (detail.type === 'postmessage_payment') {
+        log('💳 PostMessage payment detected:', d);
+        if (d.transactionId && !networkData.transaction_id) {
+          networkData.transaction_id = d.transactionId;
+          log('✅ Transaction ID from postMessage:', networkData.transaction_id);
+        }
+        if (d.orderId && !networkData.order_number) {
+          networkData.order_number = d.orderId;
+          log('✅ Order ID from postMessage:', networkData.order_number);
+        }
+        if (d.result === 'succeeded' || d.result === 'APPROVED' || d.result === 'completed') {
+          log('🎉 Payment approved via postMessage');
+          setTimeout(checkForSuccess, 500);
+        }
+      }
+
+    } catch (err) {
+      log('⚠️ Error processing network event:', err);
+    }
+  });
+
+  // Process network responses to extract order/transaction IDs
+  function processNetworkResponse(url, data, requestBody) {
+    if (!data || typeof data !== 'object') return;
+
+    const urlLower = url.toLowerCase();
+
+    // ─────────────────────────────────────────────────────────────────
+    // FundedNext-specific: product-order endpoint returns gateway_order_id
+    // Response: {"message":"success","data":{"gateway_order_id":"BP_xxx",...}}
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('product-order')) {
+      log('🔍 Processing product-order response:', url);
+
+      if (data.data?.gateway_order_id && !networkData.order_number) {
+        networkData.order_number = String(data.data.gateway_order_id);
+        log('✅ Order number from product-order:', networkData.order_number);
+        updateTrackerData({ order_number: networkData.order_number });
+      }
+
+      if (data.data?.client_secret) {
+        networkData.client_secret = data.data.client_secret;
+        log('📋 Client secret captured');
+      }
+
+      if (data.message === 'success') {
+        networkData.payment_status = 'order_created';
+        log('✅ Product order created successfully');
+      }
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // FundedNext-specific: coupon-check endpoint
+    // Response: {"message":"Coupon applied successfully!","data":{"final_amounts":{"old_amount":99.99,"coupon_amount":9.99,"payable_amount":89.99}}}
+    // URL contains plan_id param: coupon-check?plan_id=81&...
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('coupon-check')) {
+      log('🔍 Processing coupon-check response:', data);
+
+      // Get plan ID from current URL and request URL
+      const currentPlanId = window.location.pathname.match(/\/checkout\/(\d+)/)?.[1];
+      const requestPlanId = url.match(/plan_id=(\d+)/)?.[1];
+
+      log('📋 Plan IDs - URL:', currentPlanId, 'Request:', requestPlanId);
+
+      // Only update if plan ID matches current URL (ignore stale responses)
+      if (currentPlanId && requestPlanId && currentPlanId !== requestPlanId) {
+        log('⚠️ Ignoring stale coupon-check response for plan', requestPlanId, '(current:', currentPlanId, ')');
+        return;
+      }
+
+      if (data.data?.final_amounts) {
+        const amounts = data.data.final_amounts;
+        // Store in networkData so it persists and isn't overwritten by localStorage
+        if (amounts.old_amount) networkData.original_price = amounts.old_amount;
+        if (amounts.payable_amount) networkData.final_price = amounts.payable_amount;
+        if (amounts.coupon_amount) networkData.discount_amount = amounts.coupon_amount;
+        networkData.lastNetworkUpdate = Date.now();
+        log('✅ Prices from coupon-check:', { original: networkData.original_price, final: networkData.final_price });
+        updateTrackerData({
+          original_price: networkData.original_price,
+          final_price: networkData.final_price,
+          discount_amount: networkData.discount_amount
+        });
+      }
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // FundedNext-specific: calculate-challenge-price endpoint
+    // Response: {"message":"price details","data":{"payable_amount":199.99,"plan_price":199.99,"plan":{...}}}
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('calculate-challenge-price')) {
+      log('🔍 Processing calculate-challenge-price response:', data);
+      if (data.data) {
+        // Get plan ID from URL to check if this is for the current product
+        const currentPlanId = window.location.pathname.match(/\/checkout\/(\d+)/)?.[1];
+        const responsePlanId = data.data.plan?.id?.toString();
+
+        log('📋 Plan IDs - URL:', currentPlanId, 'Response:', responsePlanId);
+
+        // Only update if plan ID matches current URL (ignore stale responses)
+        if (currentPlanId && responsePlanId && currentPlanId !== responsePlanId) {
+          log('⚠️ Ignoring stale calculate-challenge-price response for plan', responsePlanId, '(current:', currentPlanId, ')');
+          return;
+        }
+
+        // Store in networkData so it persists and isn't overwritten by localStorage
+        if (data.data.payable_amount) networkData.final_price = data.data.payable_amount;
+        if (data.data.plan_price) networkData.original_price = data.data.plan_price;
+        if (data.data.plan?.name) networkData.product_name = data.data.plan.name;
+        networkData.lastNetworkUpdate = Date.now();
+        log('✅ Prices from calculate-challenge-price:', { product: networkData.product_name, original: networkData.original_price, final: networkData.final_price });
+        updateTrackerData({
+          product_name: networkData.product_name,
+          original_price: networkData.original_price,
+          final_price: networkData.final_price
+        });
+      }
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // FundedNext-specific: dynamic-checkout endpoint
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('coupon/v2') || urlLower.includes('dynamic-checkout')) {
+      log('🔍 Processing dynamic-checkout response:', url);
+      // Trigger a re-check of localStorage data with force update
+      setTimeout(() => checkAndCapture(true), 300);
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Generic fallback for other checkout/payment endpoints
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('checkout') ||
+        urlLower.includes('order') ||
+        urlLower.includes('payment') ||
+        urlLower.includes('purchase') ||
+        urlLower.includes('subscription') ||
+        urlLower.includes('transaction')) {
+
+      log('🔍 Processing potential payment endpoint:', url);
+
+      // Search for order ID - FundedNext specific keys first
+      const orderKeys = ['gateway_order_id', 'order_id', 'orderId', 'order_number', 'orderNumber',
+                         'checkout_id', 'checkoutId', 'purchase_id', 'purchaseId',
+                         'reference', 'ref', 'invoice_id', 'invoiceId'];
+      for (const key of orderKeys) {
+        if (data[key] && !networkData.order_number) {
+          networkData.order_number = String(data[key]);
+          log('✅ Order number from network:', networkData.order_number, '(key:', key, ')');
+          updateTrackerData({ order_number: networkData.order_number });
+          break;
+        }
+        // Check nested data object (FundedNext uses data.xxx pattern)
+        if (data.data && data.data[key] && !networkData.order_number) {
+          networkData.order_number = String(data.data[key]);
+          log('✅ Order number from network (data.xxx):', networkData.order_number);
+          updateTrackerData({ order_number: networkData.order_number });
+          break;
+        }
+      }
+
+      // Search for transaction ID
+      const txKeys = ['transaction_id', 'transactionId', 'tx_id', 'txId',
+                      'payment_id', 'paymentId', 'charge_id', 'chargeId', 'client_secret'];
+      for (const key of txKeys) {
+        if (data[key] && !networkData.transaction_id) {
+          networkData.transaction_id = String(data[key]);
+          log('✅ Transaction ID from network:', networkData.transaction_id, '(key:', key, ')');
+          break;
+        }
+        if (data.data && data.data[key] && !networkData.transaction_id) {
+          networkData.transaction_id = String(data.data[key]);
+          log('✅ Transaction ID from network (data.xxx):', networkData.transaction_id);
+          break;
+        }
+      }
+
+      // Check for payment success status
+      if (data.message === 'success' || data.status === 'success' ||
+          data.status === 'completed' || data.success === true) {
+        networkData.payment_status = data.message || data.status || 'success';
+        log('✅ Payment success detected via network');
+      }
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   // TRACKER UI
   // ═══════════════════════════════════════════════════════════════════════
@@ -64,14 +322,15 @@
     tracker = new window.TrackerUI({
       partner: PARTNER,
       partnerName: PARTNER_NAME,
-      fields: ['coupon', 'product', 'price', 'email'],
+      fields: ['coupon', 'product', 'price', 'email', 'order_id'],
       fieldLabels: {
         coupon: 'Coupon Code',
         product: 'Account',
         price: 'Price',
-        email: 'Email'
+        email: 'Email',
+        order_id: 'Order ID'
       },
-      afterPurchaseFields: [] // FundedNext doesn't provide order number
+      afterPurchaseFields: ['order_id']
     });
     
     // Store globally
@@ -86,7 +345,7 @@
   
   function updateTrackerData(data) {
     if (!tracker) return;
-    
+
     if (data.product_name) {
       tracker.updateField('product', data.product_name);
     }
@@ -101,6 +360,9 @@
     }
     if (data.coupon_code) {
       tracker.updateField('coupon', data.coupon_code);
+    }
+    if (data.order_number) {
+      tracker.updateField('order_id', data.order_number);
     }
   }
   
@@ -131,61 +393,77 @@
       partner: PARTNER,
       email: null,
       customer_name: null,
-      product_name: null,
-      original_price: null,
-      final_price: null,
-      discount_amount: null,
+      // Use network data if available (it's more accurate and up-to-date)
+      product_name: networkData.product_name || null,
+      original_price: networkData.original_price || null,
+      final_price: networkData.final_price || null,
+      discount_amount: networkData.discount_amount || null,
       coupon_code: null,
-      order_number: null,  // FundedNext doesn't provide this - that's OK
+      order_number: networkData.order_number || null,  // From network intercept
+      transaction_id: networkData.transaction_id || null,  // From network intercept
       plan_id: null,
       checkout_url: window.location.href
     };
+
+    // Track if we have recent network data (within last 30 seconds)
+    const hasRecentNetworkData = networkData.lastNetworkUpdate &&
+      (Date.now() - networkData.lastNetworkUpdate < 30000);
     
     // ─────────────────────────────────────────────────────────────────
     // PRIMARY: purchasePlanInfo (ONLY exists on checkout page!)
+    // Only use as FALLBACK if network data isn't available
     // ─────────────────────────────────────────────────────────────────
     try {
       const ppiRaw = localStorage.getItem('purchasePlanInfo');
       if (ppiRaw) {
         const ppi = JSON.parse(ppiRaw);
-        
+
+        // Always get coupon, email, customer from localStorage
         data.coupon_code = ppi.couponCode || ppi.coupon || null;
-        data.final_price = ppi.totalPrice || null;
-        data.original_price = ppi.plan_value || null;
-        data.discount_amount = ppi.discount_price || null;
-        data.product_name = ppi.plan_name || ppi.name || null;
-        data.plan_id = ppi.plan_id || ppi.id || null;
         data.email = ppi.email || null;
-        
+        data.plan_id = ppi.plan_id || ppi.id || null;
+
         if (ppi.personalInfo) {
           data.email = data.email || ppi.personalInfo.email;
           const firstName = ppi.personalInfo.firstName || '';
           const lastName = ppi.personalInfo.lastName || '';
           data.customer_name = `${firstName} ${lastName}`.trim() || null;
         }
-        
-        // Also check accountData for additional pricing info
-        if (ppi.accountData) {
-          if (!data.original_price && ppi.accountData.price) {
-            data.original_price = ppi.accountData.price;
+
+        // Only use localStorage for pricing/product if NO recent network data
+        if (!hasRecentNetworkData) {
+          if (!data.final_price) data.final_price = ppi.totalPrice || null;
+          if (!data.original_price) data.original_price = ppi.plan_value || null;
+          if (!data.discount_amount) data.discount_amount = ppi.discount_price || null;
+          if (!data.product_name) data.product_name = ppi.plan_name || ppi.name || null;
+
+          // Also check accountData for additional pricing info
+          if (ppi.accountData) {
+            if (!data.original_price && ppi.accountData.price) {
+              data.original_price = ppi.accountData.price;
+            }
+            if (!data.final_price && ppi.accountData.discountPrice) {
+              data.final_price = ppi.accountData.discountPrice;
+            }
+            if (ppi.accountData.size) {
+              data.account_size = ppi.accountData.size;
+            }
           }
-          if (!data.final_price && ppi.accountData.discountPrice) {
-            data.final_price = ppi.accountData.discountPrice;
+
+          // Check accountType for product name
+          if (ppi.accountType?.name && !data.product_name) {
+            data.product_name = ppi.accountType.name;
+            if (ppi.accountData?.size) {
+              data.product_name += ` ${ppi.accountData.size} USD`;
+            }
           }
-          if (ppi.accountData.size) {
-            data.account_size = ppi.accountData.size;
-          }
+
+          log('📋 Using localStorage data (no recent network data)');
+        } else {
+          log('🌐 Using network data (more recent than localStorage)');
         }
-        
-        // Check accountType for product name
-        if (ppi.accountType?.name && !data.product_name) {
-          data.product_name = ppi.accountType.name;
-          if (ppi.accountData?.size) {
-            data.product_name += ` ${ppi.accountData.size} USD`;
-          }
-        }
-        
-        log('✅ Extracted from purchasePlanInfo:', data);
+
+        log('✅ Extracted data:', data);
       }
     } catch (e) {
       log('⚠️ Error reading purchasePlanInfo:', e);
@@ -370,16 +648,22 @@
               log('🧹 Clearing paymentProcessed for next purchase');
               localStorage.removeItem('paymentProcessed');
             }
-            
+
             hasTriggeredSuccess = false;
             lastCaptureTime = 0;
             lastPaymentProcessedState = false;
-            
+
+            // Clear network data for next purchase
+            networkData.order_number = null;
+            networkData.transaction_id = null;
+            networkData.payment_status = null;
+
             // Clear tracker fields for next purchase
             if (tracker) {
               tracker.clearField('product');
               tracker.clearField('price');
               tracker.clearField('coupon');
+              tracker.clearField('order_id');
               // Keep email field
               tracker.showMessage('success', '✅ Ready to track next purchase');
             }
@@ -422,7 +706,16 @@
     log('🔄 Resetting for new purchase');
     hasTriggeredSuccess = false;
     lastCaptureTime = 0;
-    
+
+    // Clear network data so new product data can be captured
+    networkData.product_name = null;
+    networkData.original_price = null;
+    networkData.final_price = null;
+    networkData.discount_amount = null;
+    networkData.order_number = null;
+    networkData.transaction_id = null;
+    networkData.lastNetworkUpdate = 0;
+
     // Clear paymentProcessed to allow detection of next purchase
     if (localStorage.getItem('paymentProcessed') === 'true') {
       log('🧹 Clearing paymentProcessed for next purchase');
@@ -431,20 +724,22 @@
     }
   }
   
-  function checkAndCapture() {
-    if (Date.now() - lastCaptureTime < 2000) return; // Debounce
-    
+  function checkAndCapture(forceUpdate = false) {
+    // Debounce - but allow forced updates from network responses
+    if (!forceUpdate && Date.now() - lastCaptureTime < 2000) return;
+
     if (isCheckoutPage()) {
       // Show tracker on checkout
       showTracker();
-      
+
+      // Always extract and update tracker data
+      const data = extractPurchaseData();
+      updateTrackerData(data);
+
       if (localStorage.getItem('purchasePlanInfo')) {
         capturePurchase();
         lastCaptureTime = Date.now();
       } else {
-        // Still update tracker with any available data
-        const data = extractPurchaseData();
-        updateTrackerData(data);
         if (tracker) tracker.setStatus('', 'Waiting for checkout data...');
       }
     }
@@ -503,39 +798,61 @@
     }
   };
   
-  // Watch URL changes (SPA)
+  // Watch URL changes (SPA) - setup after body is ready
   let lastUrl = window.location.href;
-  new MutationObserver(() => {
-    if (window.location.href !== lastUrl) {
-      const oldUrl = lastUrl;
-      lastUrl = window.location.href;
-      log('🔗 URL changed:', lastUrl);
-      
-      // If navigating TO checkout page, reset for new purchase
-      if (isCheckoutPage()) {
-        log('🔄 Navigated to checkout - preparing for new purchase');
-        resetForNewPurchase();
-      }
-      
-      setTimeout(() => {
-        checkAndCapture();
-        checkForSuccess();
-      }, 500);
+  let urlObserver = null;
+
+  function setupUrlObserver() {
+    if (urlObserver) return; // Already set up
+    if (!document.body) {
+      // Body not ready, retry later
+      setTimeout(setupUrlObserver, 100);
+      return;
     }
-  }).observe(document.body, { childList: true, subtree: true });
-  
+
+    try {
+      urlObserver = new MutationObserver(() => {
+        try {
+          if (window.location.href !== lastUrl) {
+            const oldUrl = lastUrl;
+            lastUrl = window.location.href;
+            log('🔗 URL changed:', lastUrl);
+
+            // If navigating TO checkout page, reset for new purchase
+            if (isCheckoutPage()) {
+              log('🔄 Navigated to checkout - preparing for new purchase');
+              resetForNewPurchase();
+            }
+
+            setTimeout(() => {
+              checkAndCapture();
+              checkForSuccess();
+            }, 500);
+          }
+        } catch (e) {
+          // Extension context may be invalidated
+        }
+      });
+
+      urlObserver.observe(document.body, { childList: true, subtree: true });
+      log('🔍 URL observer initialized');
+    } catch (e) {
+      log('⚠️ Failed to setup URL observer:', e.message);
+    }
+  }
+
   // Watch form changes
   document.addEventListener('change', (e) => {
     if (e.target.tagName === 'INPUT') {
       setTimeout(checkAndCapture, 500);
     }
   });
-  
+
   // Also watch for click on payment buttons
   document.addEventListener('click', (e) => {
     const target = e.target;
     const text = target.textContent?.toLowerCase() || '';
-    
+
     // If clicking a pay/submit button, capture immediately
     if (text.includes('pay') || text.includes('submit') || text.includes('complete')) {
       log('💳 Payment button clicked');
@@ -595,6 +912,17 @@
       chrome.runtime.sendMessage({ action: 'RETRY_FAILED' }, (response) => {
         console.log('[FN-Queue] Retried:', response);
       });
+    },
+    // Network data debug
+    network: () => networkData,
+    networkLog: () => networkData.network_log,
+    showNetwork: () => {
+      console.log('[FN-Queue] Network Data:');
+      console.log('  Order Number:', networkData.order_number);
+      console.log('  Transaction ID:', networkData.transaction_id);
+      console.log('  Payment Status:', networkData.payment_status);
+      console.log('  Requests logged:', networkData.network_log.length);
+      return networkData;
     }
   };
   
@@ -606,27 +934,32 @@
   log('   isCheckoutPage:', isCheckoutPage());
   log('   isSuccessPage:', isSuccessPage());
   log('   hasPaymentProcessed:', hasPaymentProcessed());
-  
+
   // Initialize payment state tracking
   initPaymentState();
-  
+
   // If on checkout page, reset for new purchase
   if (isCheckoutPage()) {
     resetForNewPurchase();
   }
-  
+
+  // Setup URL observer (will wait for body if needed)
+  setupUrlObserver();
+
   setTimeout(() => {
     checkAndCapture();
     checkForSuccess();
   }, 1000);
-  
+
   window.addEventListener('load', () => {
+    // Ensure observer is set up after load
+    setupUrlObserver();
     setTimeout(() => {
       checkAndCapture();
       checkForSuccess();
     }, 500);
   });
-  
+
   // Also check periodically in case data loads late
   setInterval(() => {
     if (isCheckoutPage()) {
