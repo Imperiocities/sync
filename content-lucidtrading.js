@@ -498,10 +498,6 @@
             t.showMessage('warning', successResponse?.error || 'Data captured but API did not confirm');
           }
 
-          // Download tracking data
-          if (t.downloadData) {
-            t.downloadData(payload, successResponse);
-          }
         }
       });
     });

@@ -324,62 +324,6 @@
       if (el) el.style.display = 'none';
     }
 
-    // --- Auto-download tracking data ---
-
-    downloadData(payload, apiResponse) {
-      try {
-        // Separate _enriched from core purchase fields
-        const enriched = payload?._enriched || {};
-        const purchase = {};
-        if (payload) {
-          for (const [k, v] of Object.entries(payload)) {
-            if (k !== '_enriched') purchase[k] = v;
-          }
-        }
-
-        const exportData = {
-          exportedAt: new Date().toISOString(),
-          extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
-            ? chrome.runtime.getManifest().version
-            : 'unknown',
-          partner: payload?.partner || 'unknown',
-          purchase: purchase,
-          enriched: enriched,
-          apiResponse: apiResponse || null,
-          trackerFields: Object.assign({}, this.fieldValues)
-        };
-
-        const json = JSON.stringify(exportData, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const orderNum = payload?.order_number || payload?.transaction_id || '';
-        const dateStr = new Date().toISOString().replace(/[:.]/g, '-').split('T');
-        const safeName = orderNum
-          ? `pfc-tpt-${String(orderNum).replace(/[^a-zA-Z0-9_-]/g, '')}-${dateStr[0]}`
-          : `pfc-tpt-${dateStr[0]}-${dateStr[1].substring(0, 8)}`;
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = safeName + '.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        // Show download notice in tracker
-        const msgEl = this.container?.querySelector('.propfirm-tracker-message');
-        if (msgEl) {
-          msgEl.className = 'propfirm-tracker-message propfirm-tracker-download-notice';
-          msgEl.textContent = 'Tracking data saved to Downloads';
-          msgEl.style.display = 'block';
-          setTimeout(() => { msgEl.style.display = 'none'; }, 6000);
-        }
-      } catch (err) {
-        console.error('[TrackerUI] downloadData error:', err);
-      }
-    }
-
     // --- Private helpers ---
 
     _toggleMinimize() {
