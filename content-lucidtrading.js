@@ -358,6 +358,42 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════
+  // DASHBOARD DATA CAPTURE (dash.lucidtrading.com)
+  // ═══════════════════════════════════════════════════════════════════
+
+  function captureDashboardData() {
+    // Try common selectors for SPA checkout pages
+    // Email
+    if (!purchaseData.email) {
+      const emailEl = document.querySelector('input[type="email"], input[name*="email" i], input[placeholder*="email" i]');
+      if (emailEl && emailEl.value) {
+        purchaseData.email = emailEl.value;
+      }
+    }
+
+    // Product name — look for selected account/plan text
+    if (!purchaseData.product_name) {
+      const selectedPlan = document.querySelector('[class*="selected"] [class*="title"], [class*="active"] [class*="plan"], [class*="selected"] h3, [class*="selected"] h4');
+      if (selectedPlan) {
+        purchaseData.product_name = selectedPlan.textContent.trim();
+      }
+    }
+
+    // Price — look for total/price elements
+    if (!purchaseData.original_price) {
+      const priceEl = document.querySelector('[class*="total"] [class*="price"], [class*="price"], [class*="amount"]');
+      if (priceEl) {
+        const priceMatch = priceEl.textContent.match(/\$?([\d,]+\.?\d*)/);
+        if (priceMatch) {
+          purchaseData.original_price = parseFloat(priceMatch[1].replace(',', ''));
+        }
+      }
+    }
+
+    return !!(purchaseData.email || purchaseData.product_name || purchaseData.original_price);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
   // SUCCESS DETECTION
   // ═══════════════════════════════════════════════════════════════════
 
@@ -507,9 +543,16 @@
   // CHECKOUT DETECTION
   // ═══════════════════════════════════════════════════════════════════
 
+  function isDashboardCheckout() {
+    const hostname = window.location.hostname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return hostname.includes('dash.lucidtrading') || hash.includes('add-account');
+  }
+
   function detectCheckout() {
     const path = window.location.pathname.toLowerCase();
 
+    // WooCommerce checkout (lucidtrading.com/checkout)
     if (path.includes('checkout') || document.querySelector('.woocommerce-checkout')) {
       console.log('[PFC-Lucid] Checkout page detected');
       showTracker();
@@ -518,6 +561,18 @@
       // Initial data capture
       captureBillingFromDOM();
       capturePricingFromDOM();
+      updateTrackerUI();
+
+      return true;
+    }
+
+    // Dashboard checkout (dash.lucidtrading.com/#/add-account)
+    if (isDashboardCheckout()) {
+      console.log('[PFC-Lucid] Dashboard checkout detected');
+      showTracker();
+      setStatus('waiting', 'Watching for purchase...');
+
+      captureDashboardData();
       updateTrackerUI();
 
       return true;
@@ -539,9 +594,14 @@
   function startWatchers() {
     // Poll for DOM changes and order success
     setInterval(() => {
-      // Re-capture from DOM periodically
-      captureBillingFromDOM();
-      capturePricingFromDOM();
+      if (isDashboardCheckout()) {
+        // Dashboard checkout — poll dashboard-specific selectors
+        captureDashboardData();
+      } else {
+        // WooCommerce checkout — poll WooCommerce selectors
+        captureBillingFromDOM();
+        capturePricingFromDOM();
+      }
       updateTrackerUI();
 
       // Check for order success

@@ -220,9 +220,15 @@
   };
 
   // --- Auto-apply coupon on checkout page load ---
+  function isDashCheckout() {
+    var hostname = window.location.hostname.toLowerCase();
+    var hash = window.location.hash.toLowerCase();
+    return hostname.includes('dash.lucidtrading') || hash.includes('add-account');
+  }
+
   function initCouponOnCheckout() {
     var path = window.location.pathname.toLowerCase();
-    if (path.includes('checkout') || path.includes('cart')) {
+    if (path.includes('checkout') || path.includes('cart') || isDashCheckout()) {
       console.log('[PFC-Lucid] Checkout/cart page detected');
 
       // Wait for page to load then check for existing coupon
@@ -250,11 +256,13 @@
   // Run on script load
   initCouponOnCheckout();
 
-  // Also watch for SPA navigation
+  // Also watch for SPA navigation (pathname + hash for dashboard)
   var lastPath = window.location.pathname;
+  var lastHash = window.location.hash;
   setInterval(function() {
-    if (window.location.pathname !== lastPath) {
+    if (window.location.pathname !== lastPath || window.location.hash !== lastHash) {
       lastPath = window.location.pathname;
+      lastHash = window.location.hash;
       couponApplyAttempted = false;
       initCouponOnCheckout();
     }
