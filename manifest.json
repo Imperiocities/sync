@@ -110,7 +110,8 @@
     {
       "matches": [
         "*://*.lucidtrading.com/*",
-        "*://lucidtrading.com/*"
+        "*://lucidtrading.com/*",
+        "*://dash.lucidtrading.com/*"
       ],
       "js": ["lucid-net-intercept.js"],
       "run_at": "document_start",
@@ -120,7 +121,8 @@
     {
       "matches": [
         "*://*.lucidtrading.com/*",
-        "*://lucidtrading.com/*"
+        "*://lucidtrading.com/*",
+        "*://dash.lucidtrading.com/*"
       ],
       "js": [
         "shared/tracker-ui.js",
