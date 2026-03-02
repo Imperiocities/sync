@@ -50,7 +50,7 @@
   const originalLog = console.log;
   const PARTNER = 'takeprofittrader';
   const ADAPTER_VERSION = '6.0';
-  const DEV_SKIP_EMAIL_CHECK = true;  // TEMPORARY: bypass extension email validation for testing
+  const DEV_SKIP_EMAIL_CHECK = false;  // TEMPORARY: bypass extension email validation for testing
 
   // Product mapping for TPT subscription IDs
   const TPT_PRODUCTS = {
@@ -1236,9 +1236,6 @@
         } else {
           addEvent('submission_failed', 'All retry attempts exhausted');
           setStatus('error', 'Failed after retries');
-          // Download data even on total failure so nothing is lost
-          var ft = tracker || window.__pfcTracker;
-          if (ft && ft.downloadData) ft.downloadData(payload, { success: false, error: 'All retry attempts exhausted' });
         }
         return;
       }
@@ -1282,8 +1279,6 @@
             setStatus('warning', 'Purchase detected');
             t.showMessage('warning', successResponse?.error || 'Data captured but API did not confirm');
           }
-          // Always download tracking data regardless of API result
-          if (t.downloadData) t.downloadData(payload, successResponse);
         }
       });
     });
@@ -1576,6 +1571,28 @@
       autofillInProgress = false;
 
       addEvent('autofill_completed', 'Coupon LAB autofilled and applied');
+
+      // Store LAB immediately so it's available even if network confirmation is slow
+      purchaseData.coupon_code = 'LAB';
+
+      // Wait for network confirmation, then fall back to DOM check
+      setTimeout(() => {
+        if (!couponConfirmed) {
+          originalLog.call(console, '[TPT] Network confirmation not received, checking DOM...');
+          // Check if discount appeared in DOM
+          capturePricing();
+          // If still not confirmed but LAB is in the input, force confirm
+          if (!couponConfirmed) {
+            const codeInput = document.querySelector('input[name="code"]');
+            if (codeInput && codeInput.value?.toUpperCase() === 'LAB') {
+              couponConfirmed = true;
+              originalLog.call(console, '[TPT] Coupon LAB confirmed via DOM input fallback');
+              addEvent('coupon_confirmed', 'Coupon LAB confirmed via autofill DOM fallback');
+              updateTrackerUI();
+            }
+          }
+        }
+      }, 2000);
 
       setTimeout(() => {
         if (input) {
@@ -1925,49 +1942,6 @@
           addEvent('checkout_modal_closed', 'Checkout modal closed');
           modalWasOpen = false;
 
-          // Auto-download tracking data when modal closes (purchase likely completed)
-          // This fires regardless of submission status so data is never lost
-          var mt = tracker || window.__pfcTracker;
-          if (mt && mt.downloadData) {
-            var modalClosePayload = {
-              partner: PARTNER,
-              email: purchaseData.email,
-              customer_name: purchaseData.customer_name,
-              product_name: purchaseData.product_name,
-              original_price: purchaseData.original_price,
-              final_price: purchaseData.final_price,
-              coupon_code: purchaseData.coupon_code,
-              order_number: purchaseData.account_id,
-              purchase_type: purchaseData.purchase_type,
-              platform: purchaseData.platform,
-              transaction_id: purchaseData.transaction_id,
-              checkout_url: window.location.href,
-              _enriched: {
-                session_id: sessionContext.session_id,
-                adapter_version: sessionContext.adapter_version,
-                checkout_duration_ms: Date.now() - sessionContext.started_timestamp,
-                browser_summary: {
-                  platform: sessionContext.browser.platform,
-                  language: sessionContext.browser.language,
-                  userAgent: sessionContext.browser.userAgent
-                },
-                page_url: sessionContext.page.url,
-                event_count: eventTimeline.length,
-                network_request_count: networkLog.length,
-                error_count: errorLog.length,
-                event_timeline: eventTimeline.slice(),
-                network_summary: networkLog.map(function(n) {
-                  return { t: n.elapsed_ms, m: n.method, p: n.url_path, s: n.status, d: n.duration_ms };
-                }),
-                price_changes: priceHistory.slice(),
-                errors: errorLog.slice(),
-                storage_snapshot: captureStorageSnapshot(),
-                dom_snapshot: captureDOMSnapshot('modal_close')
-              }
-            };
-            mt.downloadData(modalClosePayload, { trigger: 'modal_close', captureStatus: captureStatus });
-          }
-
           startWatchingForNewAccount();
         }
 
@@ -2050,6 +2024,7 @@
       sendResponse({
         partner: PARTNER,
         captureStatus: captureStatus,
+        purchase_status: captureStatus === 'success' ? 'success' : 'checkout',
         purchaseData: purchaseData,
         session: sessionContext,
         eventTimeline: eventTimeline,

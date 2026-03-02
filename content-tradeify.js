@@ -27,7 +27,7 @@
 
   const PARTNER = 'tradeify';
   const PARTNER_NAME = 'Tradeify';
-  const DEBUG = true;
+  const DEBUG = false;
   const VERSION = 'v1.2';
   const VALID_COUPONS = ['LAB'];
 
@@ -50,9 +50,28 @@
     couponCode: null,
     couponDiscount: null,
     couponDiscountType: null,
+    couponLockedByExtension: false, // True when we applied LAB — don't let API overwrite
+    couponDiscountAmount: null,
+    orderPaidAmount: null,   // Actual amount paid (from couponsCheck final_price)
     lastNetworkUpdate: 0,
     network_log: []
   };
+
+  // Persist coupon + price to session storage (survives full-page nav)
+  function persistCouponToSession() {
+    try {
+      chrome.storage.session.set({
+        pfc_tradeify_coupon: {
+          couponCode: networkData.couponCode,
+          email: networkData.email,
+          orderPaidAmount: networkData.orderPaidAmount,
+          couponDiscount: networkData.couponDiscount,
+          couponDiscountType: networkData.couponDiscountType,
+          timestamp: Date.now()
+        }
+      });
+    } catch (e) { /* session storage not available */ }
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // INTERCOM DATA FROM LOCALSTORAGE
@@ -108,6 +127,39 @@
 
       const d = detail.data;
 
+      // Handle coupon_applied from net-intercept (LAB was submitted by us)
+      // d = { coupon_code, response: { success, data: { success, status, data: { coupon_applied, original_price, discount_amount, discount_percent, final_price } } } }
+      if (detail.type === 'coupon_applied') {
+        log('✅ LAB coupon applied by extension (net-intercept confirmed)');
+        networkData.couponCode = 'LAB';
+        networkData.couponLockedByExtension = true;
+
+        // Extract discount + final price from couponsCheck response
+        const couponResp = d.response?.data?.data || d.response?.data || d.response;
+        if (couponResp) {
+          log('📋 coupon_applied response:', JSON.stringify(couponResp).substring(0, 300));
+          if (couponResp.discount_percent) {
+            networkData.couponDiscount = parseFloat(couponResp.discount_percent) || 0;
+            networkData.couponDiscountType = 'percentage';
+          }
+          if (couponResp.final_price) {
+            networkData.orderPaidAmount = parseFloat(couponResp.final_price) || 0;
+            log('✅ Final price from coupon response:', networkData.orderPaidAmount);
+          }
+          if (couponResp.discount_amount) {
+            networkData.couponDiscountAmount = parseFloat(couponResp.discount_amount) || 0;
+          }
+        }
+
+        persistCouponToSession();
+        updateTrackerFromNetwork();
+        // Re-attempt capture now that LAB is confirmed
+        if (isCheckoutPage() && !purchaseCaptured) {
+          setTimeout(captureCheckout, 300);
+        }
+        return;
+      }
+
       // Log network requests
       if (detail.type === 'fetch' || detail.type === 'xhr') {
         networkData.network_log.push({
@@ -141,22 +193,41 @@
     // ─────────────────────────────────────────────────────────────────
     if (urlLower.includes('plandetails')) {
       log('🔍 Processing plandetails response');
+      // Try multiple response structures (API may vary)
+      let plan = null;
       if (data.success && data.data?.data) {
-        const plan = data.data.data;
+        plan = data.data.data;
+      } else if (data.data && typeof data.data === 'object' && data.data.name) {
+        plan = data.data;
+      } else if (data.success && data.data && typeof data.data === 'object') {
+        plan = data.data;
+      } else if (typeof data === 'object' && data.name && data.price) {
+        plan = data;
+      }
+
+      if (plan) {
         networkData.plan = plan;
         networkData.lastNetworkUpdate = Date.now();
 
-        // Extract coupon info
-        if (plan.coupon_code) {
-          networkData.couponCode = plan.coupon_code;
+        // Only store coupon if it's a valid tracked coupon (LAB).
+        // The API returns the plan's default promo (e.g. "Feb") which would
+        // poison networkData before our LAB autofill runs.
+        if (plan.coupon_code && VALID_COUPONS.includes(plan.coupon_code.toUpperCase())) {
+          if (!networkData.couponLockedByExtension) {
+            networkData.couponCode = plan.coupon_code;
+          }
           networkData.couponDiscount = parseFloat(plan.coupon_discount_value) || 0;
           networkData.couponDiscountType = plan.coupon_discount_type;
+        } else if (plan.coupon_code) {
+          log('⏭️ Ignoring non-tracked API coupon "' + plan.coupon_code + '"');
         }
 
         log('✅ Plan details:', plan.name, plan.price, 'coupon:', plan.coupon_code);
 
         // Update tracker
         updateTrackerFromNetwork();
+      } else {
+        log('⚠️ plandetails response structure not recognized:', JSON.stringify(data).substring(0, 200));
       }
       return;
     }
@@ -210,6 +281,91 @@
     }
 
     // ─────────────────────────────────────────────────────────────────
+    // Order details endpoint (called on success/thank-you page)
+    // /api/dashboard/orderdetails?id=xxx
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('orderdetails')) {
+      log('🔍 Processing orderdetails response');
+      let order = null;
+      if (data.success && data.data?.data) {
+        order = data.data.data;
+      } else if (data.data && typeof data.data === 'object') {
+        order = data.data;
+      } else if (data.success && data.data) {
+        order = data.data;
+      }
+
+      if (order) {
+        // Extract order number
+        if (order.id || order.order_id) {
+          networkData.orderId = String(order.id || order.order_id);
+          log('✅ Order ID from orderdetails:', networkData.orderId);
+        }
+
+        // Extract actual paid price from order (most accurate source)
+        // Log order keys for debugging (helps identify field names)
+        log('📋 Order keys:', Object.keys(order).join(', '));
+        const paidAmount = parseFloat(
+          order.amount_paid || order.paid_amount || order.total || order.total_paid ||
+          order.final_price || order.final_amount || order.price_paid ||
+          order.final_price_paid || order.discounted_price || order.net_amount || order.subtotal ||
+          order.amount || order.charge_amount || order.payment_amount || 0
+        ) || 0;
+        if (paidAmount > 0 && paidAmount !== parseFloat(networkData.plan?.price || 0)) {
+          // Only use if it differs from the base price (meaning discount was applied)
+          networkData.orderPaidAmount = paidAmount;
+          log('✅ Paid amount from orderdetails:', paidAmount);
+        } else if (paidAmount > 0) {
+          log('ℹ️ Order amount matches plan price:', paidAmount, '— checking for discount fields');
+          // Check if order has its own discount info
+          const orderDiscount = parseFloat(order.discount || order.discount_amount || order.coupon_discount || 0) || 0;
+          if (orderDiscount > 0) {
+            networkData.orderPaidAmount = paidAmount - orderDiscount;
+            log('✅ Calculated paid amount:', paidAmount, '-', orderDiscount, '=', networkData.orderPaidAmount);
+          } else if (networkData.couponCode === 'LAB' && networkData.plan?.coupon_discount_value) {
+            // Fallback: calculate from plan's discount if LAB coupon is active
+            const discountPct = parseFloat(networkData.plan.coupon_discount_value) || 0;
+            const originalPrice = parseFloat(networkData.plan.price) || 0;
+            if (discountPct > 0 && originalPrice > 0) {
+              networkData.orderPaidAmount = originalPrice * (1 - discountPct / 100);
+              log('✅ Calculated paid amount from plan discount:', networkData.orderPaidAmount);
+            }
+          }
+        }
+
+        // Extract coupon from order if present
+        const orderCoupon = order.coupon_code || order.coupon || order.applied_coupon;
+        if (orderCoupon && VALID_COUPONS.includes(String(orderCoupon).toUpperCase()) && !networkData.couponCode) {
+          networkData.couponCode = String(orderCoupon).toUpperCase();
+          networkData.couponLockedByExtension = true;
+          log('✅ LAB coupon confirmed from orderdetails');
+        }
+
+        // If plan data is missing, try to recover from order
+        if (!networkData.plan) {
+          if (order.plan_id && networkData.plans[order.plan_id]) {
+            networkData.plan = networkData.plans[order.plan_id];
+            log('🔗 Recovered plan from orderdetails plan_id:', order.plan_id);
+          } else if (order.plan) {
+            networkData.plan = order.plan;
+            log('🔗 Got plan from orderdetails response');
+          }
+          if (networkData.plan) {
+            networkData.lastNetworkUpdate = Date.now();
+            // Only store valid tracked coupons — don't let default promos (e.g. "Feb") leak in
+            if (networkData.plan.coupon_code && VALID_COUPONS.includes(networkData.plan.coupon_code.toUpperCase()) && !networkData.couponLockedByExtension) {
+              networkData.couponCode = networkData.plan.coupon_code;
+              networkData.couponDiscount = parseFloat(networkData.plan.coupon_discount_value) || 0;
+              networkData.couponDiscountType = networkData.plan.coupon_discount_type;
+            }
+            updateTrackerFromNetwork();
+          }
+        }
+      }
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
     // Intercom ping (contains user_data with email, user_id, name)
     // ─────────────────────────────────────────────────────────────────
     if (urlLower.includes('intercom') && urlLower.includes('ping')) {
@@ -238,6 +394,63 @@
           }
         } catch (e) {
           log('⚠️ Error parsing Intercom data:', e);
+        }
+      }
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Coupon check endpoint — confirms LAB was applied server-side
+    // /api/dashboard/couponsCheck/{planId}
+    // ─────────────────────────────────────────────────────────────────
+    if (urlLower.includes('couponscheck')) {
+      log('🔍 Processing couponsCheck response');
+      // Check the request body to see which coupon was submitted
+      let submittedCoupon = null;
+      if (requestBody) {
+        try {
+          const req = typeof requestBody === 'string' ? JSON.parse(requestBody) : requestBody;
+          submittedCoupon = req.coupon_code;
+        } catch (e) {}
+      }
+
+      // Also check response data for coupon_applied field (fallback if request body parsing fails)
+      const couponRespData = data?.data?.data || data?.data || data;
+      const responseCoupon = couponRespData?.coupon_applied || couponRespData?.coupon_code;
+
+      if ((submittedCoupon && submittedCoupon.toUpperCase() === 'LAB') ||
+          (responseCoupon && String(responseCoupon).toUpperCase() === 'LAB')) {
+        log('✅ LAB coupon confirmed via couponsCheck API');
+        networkData.couponCode = 'LAB';
+        networkData.couponLockedByExtension = true;
+        persistCouponToSession();
+
+        // Extract discount info from couponsCheck response
+        // Actual structure: { success, data: { success, status, data: { coupon_applied, original_price, discount_amount, discount_percent, final_price } } }
+        const couponData = couponRespData;
+        log('📋 couponsCheck response data:', JSON.stringify(couponData).substring(0, 300));
+        if (couponData) {
+          // discount_percent is the percentage value (e.g. "30.00")
+          if (couponData.discount_percent) {
+            networkData.couponDiscount = parseFloat(couponData.discount_percent) || 0;
+            networkData.couponDiscountType = 'percentage';
+          }
+          // final_price is the actual amount to pay after discount
+          if (couponData.final_price) {
+            networkData.orderPaidAmount = parseFloat(couponData.final_price) || 0;
+            log('✅ Final price from couponsCheck:', networkData.orderPaidAmount);
+          }
+          // Also store discount_amount for reference
+          if (couponData.discount_amount) {
+            networkData.couponDiscountAmount = parseFloat(couponData.discount_amount) || 0;
+          }
+        }
+
+        updateTrackerFromNetwork();
+
+        // Re-attempt capture now that LAB is confirmed
+        if (isCheckoutPage() && !purchaseCaptured) {
+          setTimeout(captureCheckout, 300);
         }
       }
       return;
@@ -284,11 +497,21 @@
     const originalPrice = parseFloat(plan.price) || 0;
     let finalPrice = originalPrice;
 
-    // Calculate discounted price
-    if (networkData.couponDiscount && networkData.couponDiscountType === 'percentage') {
-      finalPrice = originalPrice * (1 - networkData.couponDiscount / 100);
-    } else if (networkData.couponDiscount && networkData.couponDiscountType === 'fixed') {
-      finalPrice = originalPrice - networkData.couponDiscount;
+    // Get discount info — prefer networkData, fallback to plan's coupon fields
+    let discountValue = networkData.couponDiscount;
+    let discountType = networkData.couponDiscountType;
+    if (!discountValue && networkData.couponCode && plan.coupon_discount_value) {
+      discountValue = parseFloat(plan.coupon_discount_value) || 0;
+      discountType = plan.coupon_discount_type;
+    }
+
+    // Use actual paid amount if available, otherwise calculate from discount
+    if (networkData.orderPaidAmount && networkData.orderPaidAmount > 0) {
+      finalPrice = networkData.orderPaidAmount;
+    } else if (discountValue && discountType === 'percentage') {
+      finalPrice = originalPrice * (1 - discountValue / 100);
+    } else if (discountValue && discountType === 'fixed') {
+      finalPrice = originalPrice - discountValue;
     }
 
     const productName = `${plan.plan_type || ''} ${plan.account_type || plan.name}`.trim();
@@ -413,18 +636,61 @@
       extractIntercomData();
     }
 
+    // If no plan loaded yet, try to match from URL plan_id against loaded plans
+    if (!networkData.plan) {
+      const urlPlanId = getUrlPlanId();
+      if (urlPlanId && networkData.plans[urlPlanId]) {
+        log('🔗 Matched plan from URL plan_id:', urlPlanId);
+        networkData.plan = networkData.plans[urlPlanId];
+        networkData.lastNetworkUpdate = Date.now();
+
+        // Don't copy plan's default coupon here — coupon should only come from
+        // coupon_applied event or plandetails response handler to avoid race
+        // with LAB auto-apply
+
+        updateTrackerFromNetwork();
+      }
+    }
+
     const plan = networkData.plan || {};
     const originalPrice = parseFloat(plan.price) || 0;
     let finalPrice = originalPrice;
 
-    // Calculate discounted price
-    if (networkData.couponDiscount && networkData.couponDiscountType === 'percentage') {
-      finalPrice = originalPrice * (1 - networkData.couponDiscount / 100);
-    } else if (networkData.couponDiscount && networkData.couponDiscountType === 'fixed') {
-      finalPrice = originalPrice - networkData.couponDiscount;
+    // Get discount info — prefer networkData, fallback to plan's coupon fields
+    let discountValue = networkData.couponDiscount;
+    let discountType = networkData.couponDiscountType;
+    if (!discountValue && networkData.couponCode && plan.coupon_discount_value) {
+      discountValue = parseFloat(plan.coupon_discount_value) || 0;
+      discountType = plan.coupon_discount_type;
+      log('ℹ️ Using plan coupon_discount_value for price calculation:', discountValue, discountType);
+    }
+
+    // Use actual paid amount if available, otherwise calculate from discount
+    if (networkData.orderPaidAmount && networkData.orderPaidAmount > 0) {
+      finalPrice = networkData.orderPaidAmount;
+    } else if (discountValue && discountType === 'percentage') {
+      finalPrice = originalPrice * (1 - discountValue / 100);
+    } else if (discountValue && discountType === 'fixed') {
+      finalPrice = originalPrice - discountValue;
     }
 
     const productName = plan.account_type || plan.name || null;
+
+    // URL-based coupon detection — Tradeify puts couponCode=LAB in the URL after apply
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCoupon = urlParams.get('couponCode') || urlParams.get('coupon_code');
+    if (urlCoupon && urlCoupon.toUpperCase() === 'LAB' && !networkData.couponCode) {
+      log('✅ LAB coupon detected from URL parameter');
+      networkData.couponCode = 'LAB';
+      networkData.couponLockedByExtension = true;
+    }
+
+    // Extract orderID from URL (thank-you page has ?orderID=xxx)
+    const urlOrderId = urlParams.get('orderID') || urlParams.get('orderId') || urlParams.get('order_id');
+    if (urlOrderId && !networkData.orderId) {
+      networkData.orderId = urlOrderId;
+      log('✅ Order ID from URL params:', urlOrderId);
+    }
 
     return {
       partner: PARTNER,
@@ -439,10 +705,11 @@
       final_price: finalPrice || null,
       discount_amount: originalPrice - finalPrice || null,
       coupon_code: networkData.couponCode,
-      order_number: null,
+      order_number: networkData.orderId || urlOrderId || null,
       plan_id: plan.id || getUrlPlanId(),
       broker: plan.broker || null,
-      checkout_url: window.location.href
+      checkout_url: window.location.href,
+      purchase_status: hasTriggeredSuccess ? 'success' : 'checkout'
     };
   }
 
@@ -490,56 +757,206 @@
       tracker.setStatus('waiting', 'Waiting for payment...');
     }
 
-    chrome.runtime.sendMessage({ action: 'CAPTURE_PURCHASE', data }, (response) => {
-      if (chrome.runtime.lastError) {
-        log('❌ Capture error:', chrome.runtime.lastError.message);
-        return;
-      }
-      if (response?.success) {
-        purchaseCaptured = true;
-        log('✅ Queued with fingerprint:', response.fingerprint);
-      }
-    });
+    let captureRetries = 0;
+    const MAX_CAPTURE_RETRIES = 3;
+
+    function sendCapture() {
+      chrome.runtime.sendMessage({ action: 'CAPTURE_PURCHASE', data }, (response) => {
+        if (chrome.runtime.lastError) {
+          log('❌ Capture error:', chrome.runtime.lastError.message, '(attempt', captureRetries + 1 + ')');
+          captureRetries++;
+          if (captureRetries < MAX_CAPTURE_RETRIES) {
+            log('🔄 Retrying capture in', captureRetries * 2, 'seconds...');
+            setTimeout(sendCapture, captureRetries * 2000);
+          } else {
+            log('❌ Capture failed after', MAX_CAPTURE_RETRIES, 'attempts');
+            if (tracker) tracker.setStatus('error', 'Capture failed — reload page and retry');
+          }
+          return;
+        }
+        if (response?.success) {
+          purchaseCaptured = true;
+          log('✅ Queued with fingerprint:', response.fingerprint);
+          // Persist checkout data so success page can recover it after navigation
+          try {
+            chrome.storage.session.set({ pfc_tradeify_checkout: data });
+          } catch (e) { /* session storage not available in older Chrome */ }
+        } else {
+          log('❌ Capture returned failure:', response?.error);
+          captureRetries++;
+          if (captureRetries < MAX_CAPTURE_RETRIES) {
+            log('🔄 Retrying capture in', captureRetries * 2, 'seconds...');
+            setTimeout(sendCapture, captureRetries * 2000);
+          } else {
+            log('❌ Capture failed after', MAX_CAPTURE_RETRIES, 'attempts');
+            if (tracker) tracker.setStatus('error', 'Capture failed — reload page and retry');
+          }
+        }
+      });
+    }
+
+    sendCapture();
   }
 
-  function triggerSuccess() {
+  async function triggerSuccess() {
     if (hasTriggeredSuccess) return;
     hasTriggeredSuccess = true;
 
     log('🎉 Success page detected');
 
+    // Wait for discount data to arrive (orderdetails may still be loading)
+    const waitStart = Date.now();
+    while (!networkData.orderPaidAmount && Date.now() - waitStart < 3000) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+    if (networkData.orderPaidAmount) {
+      log('✅ Discount data available after', Date.now() - waitStart, 'ms');
+    } else {
+      log('⚠️ No discount data after 3s wait — proceeding with available data');
+    }
+
     const data = extractPurchaseData();
 
-    // Try to extract order ID from DOM
-    const text = document.body?.innerText || '';
-    const orderMatch = text.match(/order[:\s#]*([A-Z0-9-]+)/i) ||
-                       text.match(/confirmation[:\s#]*([A-Z0-9-]+)/i);
-    if (orderMatch) {
-      data.order_number = orderMatch[1];
-      log('✅ Order number:', data.order_number);
+    // Fallback: Try to extract order ID from DOM if not found via URL/network
+    if (!data.order_number) {
+      const text = document.body?.innerText || '';
+      const orderMatch = text.match(/order[:\s#]*([A-Z0-9-]+)/i) ||
+                         text.match(/confirmation[:\s#]*([A-Z0-9-]+)/i);
+      if (orderMatch) {
+        data.order_number = orderMatch[1];
+        log('✅ Order number from DOM:', data.order_number);
+      }
+    }
+
+    // Also try to get orderID from URL (Tradeify thank-you page has ?orderID=xxx)
+    if (!data.order_number) {
+      const urlOrderId = new URLSearchParams(window.location.search).get('orderID');
+      if (urlOrderId) {
+        data.order_number = urlOrderId;
+        log('✅ Order number from URL param:', data.order_number);
+      }
+    }
+
+    // Recover checkout data from session storage if coupon or price is missing
+    // This handles full-page navigation where networkData is lost
+    if (!data.coupon_code || !data.final_price || data.final_price === data.original_price) {
+      try {
+        const stored = await chrome.storage.session.get(['pfc_tradeify_checkout', 'pfc_tradeify_coupon']);
+        // Try full checkout data first
+        if (stored.pfc_tradeify_checkout) {
+          const cached = stored.pfc_tradeify_checkout;
+          log('📦 Recovered checkout data from session storage:', cached.coupon_code);
+          data.coupon_code = data.coupon_code || cached.coupon_code;
+          data.email = data.email || cached.email;
+          data.final_price = data.final_price || cached.final_price;
+          data.original_price = data.original_price || cached.original_price;
+          data.product_name = data.product_name || cached.product_name;
+          data.account_size = data.account_size || cached.account_size;
+          data.plan_id = data.plan_id || cached.plan_id;
+          data.customer_name = data.customer_name || cached.customer_name;
+          data.discount_amount = data.discount_amount || cached.discount_amount;
+        }
+        // Also try coupon-only storage (has price from couponsCheck)
+        if (stored.pfc_tradeify_coupon) {
+          const couponStore = stored.pfc_tradeify_coupon;
+          if (!data.coupon_code) {
+            log('📦 Recovered coupon from session storage:', couponStore.couponCode);
+            data.coupon_code = couponStore.couponCode;
+          }
+          data.email = data.email || couponStore.email;
+          // Recover discounted price from couponsCheck response
+          if (couponStore.orderPaidAmount && (!data.final_price || data.final_price === data.original_price)) {
+            data.final_price = couponStore.orderPaidAmount;
+            data.discount_amount = (data.original_price || 0) - couponStore.orderPaidAmount;
+            log('📦 Recovered final_price from session:', couponStore.orderPaidAmount);
+          }
+        }
+      } catch (e) {
+        log('⚠️ Could not recover from session storage:', e.message);
+      }
+    }
+
+    // Last resort: if still no coupon, force LAB if we're on the thank-you page
+    // (user can only reach thank-you if they paid, and our extension applies LAB)
+    if (!data.coupon_code && isSuccessPage()) {
+      log('⚠️ No coupon found on success page — defaulting to LAB');
+      data.coupon_code = 'LAB';
     }
 
     updateTrackerData(data);
 
-    chrome.runtime.sendMessage({
-      action: 'SUCCESS_DETECTED',
-      data: {
-        partner: PARTNER,
-        order_number: data.order_number,
-        email: data.email,
-        coupon_code: data.coupon_code,
-        successData: data
-      }
-    }, (response) => {
-      if (chrome.runtime.lastError) return;
+    let successRetries = 0;
+    const MAX_SUCCESS_RETRIES = 5;
 
-      if (response?.success) {
-        purchaseCaptured = false;
-        if (tracker) {
-          tracker.setStatus('success', response.skipped ? 'Already tracked' : 'Reward tracked!');
+    function sendSuccess() {
+      chrome.runtime.sendMessage({
+        action: 'SUCCESS_DETECTED',
+        data: {
+          partner: PARTNER,
+          order_number: data.order_number,
+          email: data.email,
+          coupon_code: data.coupon_code,
+          successData: data
         }
-      }
-    });
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          log('❌ SUCCESS_DETECTED error:', chrome.runtime.lastError.message, '(attempt', successRetries + 1 + ')');
+          successRetries++;
+          if (successRetries < MAX_SUCCESS_RETRIES) {
+            const delay = successRetries * 2000;
+            log('🔄 Retrying SUCCESS_DETECTED in', delay / 1000, 'seconds...');
+            if (tracker) tracker.setStatus('waiting', 'Submitting... (retry ' + successRetries + ')');
+            setTimeout(sendSuccess, delay);
+          } else {
+            log('❌ SUCCESS_DETECTED failed after', MAX_SUCCESS_RETRIES, 'attempts');
+            if (tracker) tracker.setStatus('error', 'Tracking failed — check extension login');
+            // Save to persistent storage for retry on next page load or service worker restart
+            log('💾 Saving to persistent retry storage...');
+            chrome.storage.local.set({
+              pfc_tradeify_stuck_purchase: {
+                data: data,
+                timestamp: Date.now(),
+                retries: 0,
+                order_number: data.order_number
+              }
+            });
+          }
+          return;
+        }
+
+        if (response?.success) {
+          purchaseCaptured = false;
+          log('✅ SUCCESS_DETECTED accepted:', response);
+          if (tracker) {
+            tracker.setStatus('success', response.skipped ? 'Already tracked' : 'Reward tracked!');
+          }
+        } else {
+          log('❌ SUCCESS_DETECTED returned failure:', response?.error, '(attempt', successRetries + 1 + ')');
+          successRetries++;
+          if (successRetries < MAX_SUCCESS_RETRIES) {
+            const delay = successRetries * 2000;
+            log('🔄 Retrying SUCCESS_DETECTED in', delay / 1000, 'seconds...');
+            if (tracker) tracker.setStatus('waiting', 'Submitting... (retry ' + successRetries + ')');
+            setTimeout(sendSuccess, delay);
+          } else {
+            log('❌ SUCCESS_DETECTED failed after', MAX_SUCCESS_RETRIES, 'attempts — error:', response?.error);
+            if (tracker) tracker.setStatus('error', response?.error || 'Tracking failed');
+            // Save to persistent storage for retry on next page load or service worker restart
+            log('💾 Saving to persistent retry storage...');
+            chrome.storage.local.set({
+              pfc_tradeify_stuck_purchase: {
+                data: data,
+                timestamp: Date.now(),
+                retries: 0,
+                order_number: data.order_number
+              }
+            });
+          }
+        }
+      });
+    }
+
+    sendSuccess();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -561,12 +978,23 @@
     // Check if LAB coupon already applied (look for chip with LAB text)
     const existingChip = document.querySelector('.promo_chip');
     if (existingChip && existingChip.textContent?.toUpperCase().includes('LAB')) {
-      log('✅ LAB coupon already applied');
+      log('✅ LAB coupon already applied (chip detected)');
       autofillAttempted = true;
+      // Ensure networkData has LAB even if coupon_applied event was missed
+      if (!networkData.couponCode) {
+        networkData.couponCode = 'LAB';
+        networkData.couponLockedByExtension = true;
+        persistCouponToSession();
+        updateTrackerFromNetwork();
+      }
       if (tracker) {
         tracker.updateField('coupon', 'LAB');
         tracker.setAutoFillStatus('success', 'Code "LAB" already applied ✓');
         setTimeout(() => tracker.setAutoFillStatus('hidden', ''), 3000);
+      }
+      // Trigger capture if on checkout and not yet captured
+      if (isCheckoutPage() && !purchaseCaptured) {
+        setTimeout(captureCheckout, 300);
       }
       return;
     }
@@ -709,10 +1137,25 @@
 
       log('✅ Autofill completed');
 
+      // Set networkData — don't rely solely on coupon_applied event from net-intercept
+      // The couponsCheck XHR handler will also set this if it fires, but this is the fallback
+      if (!networkData.couponCode) {
+        networkData.couponCode = 'LAB';
+        networkData.couponLockedByExtension = true;
+        log('✅ Set networkData.couponCode = LAB from autofill');
+      }
+
+      updateTrackerFromNetwork();
+
       if (tracker) {
         tracker.updateField('coupon', 'LAB');
         tracker.setAutoFillStatus('success', 'Code "LAB" applied! ✓');
         setTimeout(() => tracker.setAutoFillStatus('hidden', ''), 2000);
+      }
+
+      // Re-attempt capture now that LAB is set
+      if (isCheckoutPage() && !purchaseCaptured) {
+        setTimeout(captureCheckout, 500);
       }
 
     } catch (error) {
@@ -765,13 +1208,22 @@
         lastUrl = window.location.href;
         log('🔗 URL changed:', lastUrl);
 
-        // Reset state
+        // Reset flags for new page
         hasTriggeredSuccess = false;
         purchaseCaptured = false;
         autofillAttempted = false;
         autofillInProgress = false;
-        networkData.plan = null;
-        networkData.lastNetworkUpdate = 0;
+
+        // Only clear plan data if navigating back to plan selection
+        // Keep it when navigating from checkout to success page
+        const newPath = window.location.pathname.toLowerCase();
+        if (newPath.includes('select-plan') || newPath.includes('/dashboard')) {
+          networkData.plan = null;
+          networkData.lastNetworkUpdate = 0;
+          log('🔄 Reset plan data (navigated to plan selection)');
+        } else {
+          log('📦 Keeping plan data for success page');
+        }
 
         setTimeout(checkPage, 500);
       }
@@ -817,6 +1269,51 @@
       autofillAttempted = false;
       autofillInProgress = false;
       performAutofill();
+    },
+    exportAll: () => {
+      return JSON.stringify({
+        exportTimestamp: new Date().toISOString(),
+        extensionVersion: VERSION,
+        url: window.location.href,
+        pageType: {
+          isCheckout: isCheckoutPage(),
+          isSuccess: isSuccessPage(),
+          isSelectPlan: isSelectPlanPage()
+        },
+        captureStatus: {
+          purchaseCaptured,
+          hasTriggeredSuccess
+        },
+        purchaseData: extractPurchaseData(),
+        networkData: {
+          plan: networkData.plan,
+          email: networkData.email,
+          userId: networkData.userId,
+          userName: networkData.userName,
+          username: networkData.username,
+          phone: networkData.phone,
+          couponCode: networkData.couponCode,
+          couponDiscount: networkData.couponDiscount,
+          couponDiscountType: networkData.couponDiscountType,
+          couponDiscountAmount: networkData.couponDiscountAmount,
+          orderPaidAmount: networkData.orderPaidAmount,
+          couponLockedByExtension: networkData.couponLockedByExtension
+        },
+        networkLog: networkData.network_log
+      }, null, 2);
+    },
+    download: () => {
+      const data = window.tradeifyDebug.exportAll();
+      const orderNum = extractPurchaseData().order_number || 'unknown';
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pfc-tradeify-${orderNum}-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
   };
 
@@ -844,6 +1341,17 @@
 
     // Periodic re-check for late-loading data
     setInterval(() => {
+      // Try to match plan from URL if not yet matched but plans are loaded
+      if (!networkData.plan && Object.keys(networkData.plans).length > 0) {
+        const urlPlanId = getUrlPlanId();
+        if (urlPlanId && networkData.plans[urlPlanId]) {
+          log('🔗 Late match: plan from URL plan_id:', urlPlanId);
+          networkData.plan = networkData.plans[urlPlanId];
+          networkData.lastNetworkUpdate = Date.now();
+          // Don't copy plan's default coupon — same race condition as extractPurchaseData
+          updateTrackerFromNetwork();
+        }
+      }
       if (isCheckoutPage() && !purchaseCaptured && networkData.plan) {
         captureCheckout();
       }
@@ -855,7 +1363,75 @@
         }
       }
     }, 3000);
+
+    // Check for stuck purchases from previous failed submissions
+    chrome.storage.local.get(['pfc_tradeify_stuck_purchase'], (stored) => {
+      if (stored.pfc_tradeify_stuck_purchase) {
+        const stuck = stored.pfc_tradeify_stuck_purchase;
+        if (Date.now() - stuck.timestamp < 24 * 60 * 60 * 1000) { // < 24 hours old
+          log('🔄 Found stuck purchase, retrying:', stuck.order_number);
+          chrome.runtime.sendMessage({
+            action: 'SUCCESS_DETECTED',
+            data: {
+              partner: PARTNER,
+              order_number: stuck.data.order_number,
+              email: stuck.data.email,
+              coupon_code: stuck.data.coupon_code,
+              successData: stuck.data
+            }
+          }, (response) => {
+            if (!chrome.runtime.lastError && response?.success) {
+              log('✅ Stuck purchase submitted successfully');
+              chrome.storage.local.remove(['pfc_tradeify_stuck_purchase']);
+            } else {
+              log('⚠️ Stuck purchase retry failed:', chrome.runtime.lastError?.message || response?.error);
+            }
+          });
+        } else {
+          log('🗑️ Removing expired stuck purchase (> 24h old)');
+          chrome.storage.local.remove(['pfc_tradeify_stuck_purchase']);
+        }
+      }
+    });
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // MESSAGE LISTENER - responds to popup/background requests
+  // ═══════════════════════════════════════════════════════════════════════
+
+  chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    if (message.action === 'GET_LIVE_EXTRACTION') {
+      const data = extractPurchaseData();
+      sendResponse({
+        partner: PARTNER,
+        extractedData: data,
+        networkData: {
+          plan: networkData.plan,
+          plans: networkData.plans,
+          email: networkData.email,
+          userId: networkData.userId,
+          userName: networkData.userName,
+          username: networkData.username,
+          phone: networkData.phone,
+          couponCode: networkData.couponCode,
+          couponDiscount: networkData.couponDiscount,
+          couponDiscountType: networkData.couponDiscountType,
+          couponLockedByExtension: networkData.couponLockedByExtension,
+          orderPaidAmount: networkData.orderPaidAmount,
+          lastNetworkUpdate: networkData.lastNetworkUpdate,
+          network_log: networkData.network_log
+        },
+        pageStatus: {
+          isCheckout: isCheckoutPage(),
+          isSuccess: isSuccessPage(),
+          purchaseCaptured: purchaseCaptured,
+          hasTriggeredSuccess: hasTriggeredSuccess,
+          planLoaded: !!networkData.plan
+        }
+      });
+      return false;
+    }
+  });
 
   // Start
   if (document.readyState === 'loading') {

@@ -1,23 +1,14 @@
-// Background script for PropFirm Compare Extension v2.1.3 - FORM-BASED TRACKING
+// Background script for PropFirm Compare Extension v2.4.0 - FORM-BASED TRACKING
 // V2.1 Features: User accounts, form-based purchase tracking, rewards display§§§
 
 // Production logging control - set to false for production builds
-const DEBUG_MODE = true; // Set to false for production builds
+const DEBUG_MODE = false; // Set to false for production builds
 
 // V2: API Configuration
-const API_BASE_URL = 'https://prop-firm-compare-env-develop-junos-projects-17951c31.vercel.app';
+const API_BASE_URL = 'https://beta.propfirm.compare';
 
 // Valid coupon codes to track
-const VALID_COUPONS = [
-  'LAB',
-  'JAN',
-  // Tradeify test codes (50K Growth Giveaway)
-  'D6AW5AUR',
-  'FDE9F6ZJ',
-  '34719CZU',
-  '8JNM1V6Z',
-  'ZRX8E67V'
-];
+const VALID_COUPONS = ['LAB'];
 
 // Controlled logging functions
 const debugLog = (...args) => {
@@ -28,17 +19,17 @@ const debugLog = (...args) => {
 
 const debugError = (...args) => {
   if (DEBUG_MODE) {
-    debugError(...args);
+    console.error(...args);
   }
 };
 
 const debugWarn = (...args) => {
   if (DEBUG_MODE) {
-    debugWarn(...args);
+    console.warn(...args);
   }
 };
 
-debugLog('🚀 PropFirm Compare Extension v2.1.3 - Service Worker Starting (FORM-BASED TRACKING)');
+debugLog('🚀 PropFirm Compare Extension v2.4.0 - Service Worker Starting (FORM-BASED TRACKING)');
 
 class PropFirmExtension {
   constructor() {
@@ -200,17 +191,13 @@ class PropFirmExtension {
 
   async fetchApiData() {
     try {
-      // API Key for PropFirm Compare API authentication
-      const API_KEY = 'pfc_ext_3077aa32a2cb58e6f1c0d179f878508d5d84adb6216380426585be0b398cc96a';
-      
       debugLog('📡 Sending request to PropFirm Compare API...');
-      
-      const apiResponse = await fetch('https://propfirm.compare/api/v1/prop-firms', {
+
+      const apiResponse = await fetch(`${API_BASE_URL}/api/prop-firms`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'PropFirm Compare Extension v4.3.1',
-          'X-API-Key': API_KEY
+          'User-Agent': 'PropFirm Compare Extension v4.3.1'
         }
       });
       
@@ -287,7 +274,7 @@ class PropFirmExtension {
         const transformedFirm = {
           id: this.generateId(firm.name),
           name: firm.name,
-          logo: firm.logo || firm.logoUrl || firm.image,
+          logo: this.resolveLogoUrl(firm.logo || firm.logoUrl || firm.image),
           // Extract domains from website field or use normalized name
           domains: this.extractDomains(firm),
           codes: [
@@ -326,6 +313,14 @@ class PropFirmExtension {
       .replace(/funding/g, '')
       .replace(/trader?/g, '')
       .replace(/trading/g, '');
+  }
+
+  resolveLogoUrl(url) {
+    if (!url) return '';
+    // Already absolute — leave as-is (e.g. R2 CDN URLs)
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    // Relative path from API — prepend site base URL
+    return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   }
 
   extractDomains(firm) {
@@ -1726,14 +1721,27 @@ class PurchaseEngine {
     this.queue = [];
     this.submittedOrderNumbers = new Set(); // Only store order numbers for dedup
     this.initialized = false;
+    this._initPromise = null;
   }
 
   async init() {
+    if (this._initPromise) return this._initPromise;
+    this._initPromise = this._doInit();
+    return this._initPromise;
+  }
+
+  async _doInit() {
     const data = await chrome.storage.local.get(['purchase_queue', 'submitted_order_numbers']);
     this.queue = data.purchase_queue || [];
     this.submittedOrderNumbers = new Set(data.submitted_order_numbers || []);
     this.initialized = true;
     debugLog('[ENGINE] Ready. Queue:', this.queue.length, 'Submitted orders:', this.submittedOrderNumbers.size);
+  }
+
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.init();
+    }
   }
 
   async saveState() {
@@ -1753,6 +1761,7 @@ class PurchaseEngine {
   // Called from content script when checkout data is captured
   // EVERY capture creates a NEW entry - no fingerprint blocking
   async capturePurchase(purchaseData) {
+    await this.ensureInitialized();
     const captureId = this.generateCaptureId();
     
     // Create immutable entry
@@ -1778,6 +1787,15 @@ class PurchaseEngine {
       
       // Order number - filled on success page
       order_number: purchaseData.order_number || null,
+
+      // Additional fields from content scripts
+      user_id: purchaseData.user_id || null,
+      phone: purchaseData.phone || null,
+      discount_percent: purchaseData.discount_percent || null,
+      account_type: purchaseData.account_type || null,
+      plan_id: purchaseData.plan_id || null,
+      username: purchaseData.username || null,
+      broker: purchaseData.broker || null,
 
       // TPT-specific fields (forwarded from content script)
       platform: purchaseData.platform || null,
@@ -1866,13 +1884,50 @@ class PurchaseEngine {
 
   // Called when success page is detected
   async handleSuccess(successData) {
+    await this.ensureInitialized();
     debugLog('[ENGINE] Success detected for:', successData.partner);
     
     const match = this.findMatchingPurchase(successData);
     
     if (!match) {
-      debugLog('[ENGINE] No matching purchase in queue');
-      return { success: false, error: 'No matching purchase in queue' };
+      debugLog('[ENGINE] No matching purchase in queue — trying fallback from successData');
+
+      // Fallback: successData.successData contains the full extracted purchase data
+      // from the content script. If it has enough info, submit directly.
+      const fallback = successData.successData || successData;
+      const hasFallbackData = fallback.partner && (fallback.email || fallback.final_price);
+
+      if (hasFallbackData) {
+        const orderNumber = fallback.order_number || successData.order_number;
+        const uniqueKey = orderNumber || `fallback-${fallback.partner}-${Date.now()}`;
+
+        if (this.isAlreadySubmitted(uniqueKey)) {
+          debugLog('[ENGINE] Fallback: already submitted:', uniqueKey);
+          return { success: true, skipped: true, reason: 'duplicate' };
+        }
+
+        const fallbackData = {
+          ...fallback,
+          order_number: orderNumber,
+          success_detected_at: new Date().toISOString(),
+          source: 'fallback-no-queue-match'
+        };
+
+        debugLog('[ENGINE] Fallback submitting:', uniqueKey);
+        const result = await this.submitPurchaseToAPI(fallbackData, `fallback-${Date.now()}`);
+
+        if (result.success) {
+          this.recordSubmission(uniqueKey);
+          debugLog('[ENGINE] ✅ Fallback submitted successfully:', uniqueKey);
+        } else {
+          debugLog('[ENGINE] ❌ Fallback submit failed:', result.error);
+        }
+
+        return result;
+      }
+
+      debugLog('[ENGINE] Fallback: insufficient data, cannot submit');
+      return { success: false, error: 'No matching purchase in queue and insufficient fallback data' };
     }
     
     // Determine unique key for deduplication
@@ -1990,6 +2045,16 @@ class PurchaseEngine {
       extension_version: chrome.runtime.getManifest().version,
       source: 'immutable-queue-engine',
 
+      // Additional fields from content scripts
+      user_id: data.user_id || null,
+      account_size: data.account_size || null,
+      phone: data.phone || null,
+      discount_percent: data.discount_percent || null,
+      account_type: data.account_type || null,
+      plan_id: data.plan_id || null,
+      username: data.username || null,
+      broker: data.broker || null,
+
       // TPT-specific fields
       platform: data.platform || null,
       transaction_id: data.transaction_id || null,
@@ -2068,16 +2133,69 @@ purchaseEngine.init();
 // Cleanup every 10 minutes
 setInterval(() => purchaseEngine.cleanup(), 10 * 60 * 1000);
 
+// Check for stuck Tradeify purchases on startup
+chrome.storage.local.get(['pfc_tradeify_stuck_purchase'], async (stored) => {
+  if (stored.pfc_tradeify_stuck_purchase) {
+    const stuck = stored.pfc_tradeify_stuck_purchase;
+    if (Date.now() - stuck.timestamp < 24 * 60 * 60 * 1000) {
+      debugLog('[ENGINE] Retrying stuck Tradeify purchase:', stuck.order_number);
+      try {
+        const result = await purchaseEngine.handleSuccess({
+          partner: 'tradeify',
+          order_number: stuck.data.order_number,
+          email: stuck.data.email,
+          coupon_code: stuck.data.coupon_code,
+          successData: stuck.data
+        });
+        if (result?.success) {
+          chrome.storage.local.remove(['pfc_tradeify_stuck_purchase']);
+          debugLog('[ENGINE] ✅ Stuck purchase resolved');
+        } else {
+          debugLog('[ENGINE] ⚠️ Stuck purchase retry failed:', result?.error);
+        }
+      } catch (err) {
+        debugLog('[ENGINE] ❌ Stuck purchase retry error:', err.message);
+      }
+    } else {
+      chrome.storage.local.remove(['pfc_tradeify_stuck_purchase']);
+      debugLog('[ENGINE] 🗑️ Removed expired stuck purchase (> 24h old)');
+    }
+  }
+});
+
 // Message handlers for the purchase engine
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'CAPTURE_PURCHASE') {
-    purchaseEngine.capturePurchase(message.data).then(sendResponse);
+    // Warn user if not logged in (don't block capture — still queue for later)
+    chrome.storage.local.get(['token'], (data) => {
+      if (!data.token && sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: 'SHOW_AUTH_WARNING',
+          message: 'Please log in to the extension to track this purchase.'
+        });
+      }
+    });
+    purchaseEngine.capturePurchase(message.data).then(sendResponse).catch(err => {
+      debugLog('[ENGINE] capturePurchase error:', err.message);
+      sendResponse({ success: false, error: err.message });
+    });
     return true;
   }
-  
+
   if (message.action === 'SUCCESS_DETECTED') {
-    purchaseEngine.handleSuccess(message.data).then(sendResponse);
+    purchaseEngine.handleSuccess(message.data).then(result => {
+      if (result?.error === 'Not authenticated' && sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: 'SHOW_AUTH_WARNING',
+          message: 'Please log in to the extension to track this purchase.'
+        });
+      }
+      sendResponse(result);
+    }).catch(err => {
+      debugLog('[ENGINE] handleSuccess error:', err.message);
+      sendResponse({ success: false, error: err.message });
+    });
     return true;
   }
   
@@ -2369,8 +2487,8 @@ class AdapterQueue {
     await this.save();
     
     // Get auth token
-    const authData = await chrome.storage.local.get(['authToken']);
-    if (!authData.authToken) {
+    const authData = await chrome.storage.local.get(['token']);
+    if (!authData.token) {
       debugLog('[ADAPTER-Q] No auth token, cannot submit');
       purchase.status = 'failed';
       purchase.lastError = 'Not authenticated';
@@ -2400,7 +2518,7 @@ class AdapterQueue {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authData.authToken}`
+          'Authorization': `Bearer ${authData.token}`
         },
         body: JSON.stringify(payload)
       });
@@ -2511,24 +2629,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   // Capture purchase from adapter system
   if (message.action === 'ADAPTER_CAPTURE_PURCHASE') {
+    // Warn user if not logged in (don't block capture — still queue for later)
+    chrome.storage.local.get(['token'], (data) => {
+      if (!data.token && sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: 'SHOW_AUTH_WARNING',
+          message: 'Please log in to the extension to track this purchase.'
+        });
+      }
+    });
     adapterQueue.add(message.data).then(sendResponse);
     return true;
   }
-  
+
   // Success detected from adapter system
   if (message.action === 'ADAPTER_SUCCESS_DETECTED') {
     (async () => {
       const { partner, email, successPageData } = message.data;
-      
+
       // Find matching purchase in queue
       const match = await adapterQueue.findMatch(partner, email);
-      
+
       if (!match) {
         debugLog('[ADAPTER] No matching purchase found for:', partner, email);
         sendResponse({ success: false, error: 'No matching purchase in queue' });
         return;
       }
-      
+
       // Merge any data from success page
       if (successPageData) {
         for (const [key, value] of Object.entries(successPageData)) {
@@ -2537,9 +2664,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
       }
-      
+
       // Submit the purchase
       const result = await adapterQueue.submit(match);
+      if (result?.error === 'Not authenticated' && sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: 'SHOW_AUTH_WARNING',
+          message: 'Please log in to the extension to track this purchase.'
+        });
+      }
       sendResponse(result);
     })();
     return true;

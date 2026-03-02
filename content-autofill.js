@@ -4,7 +4,7 @@
 // NO purchase tracking - that's handled by adapters
 // ══════════════════════════════════════════════════════════════════════════════
 
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 
 const log = (...args) => {
   if (DEBUG_MODE) console.log('[AutoFill]', ...args);
@@ -38,7 +38,6 @@ function getOrCreateTracker() {
       'tradeify.co': { id: 'tradeify', name: 'Tradeify' },
       'app-f.tradeify.co': { id: 'tradeify', name: 'Tradeify' },
       'lucidtrading.com': { id: 'lucidtrading', name: 'Lucid Trading' },
-      'fundingticks.com': { id: 'fundingticks', name: 'Funding Ticks' },
       'alpha-futures.com': { id: 'alphafutures', name: 'Alpha Futures' },
       'takeprofittrader.com': { id: 'takeprofittrader', name: 'Take Profit Trader' },
       'apextraderfunding.com': { id: 'apextraderfunding', name: 'Apex Trader Funding' }

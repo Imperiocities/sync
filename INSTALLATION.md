@@ -112,7 +112,6 @@ git clone https://github.com/your-repo/propfirmcompare-chrome-extension.git
    - [Tradeify](https://tradeify.co)
    - [Take Profit Trader](https://takeprofittrader.com)
    - [Alpha Futures](https://alpha-futures.com)
-   - [Funding Ticks](https://fundingticks.com)
 
 2. Look for the floating icon on the right side of the screen
    - It appears as a dark box with the PropFirm Compare logo
@@ -252,7 +251,6 @@ PropFirmDebugTracker.exportData();
 | Tradeify | ✅ | ✅ | Fully Supported |
 | Take Profit Trader | ✅ | ✅ | Fully Supported |
 | Alpha Futures | ✅ | ✅ | Fully Supported |
-| Funding Ticks | ✅ | ✅ | Fully Supported |
 | Lucid Trading | N/A | ✅ (via webhook) | Server-side |
 
 ---

@@ -125,7 +125,7 @@
 - 🎨 **Diseño Honey** - Idéntico a la experiencia de Honey.com
 - 📱 **Responsivo** - Funciona en desktop y móvil
 - 🔍 **Detección robusta** - Background + Content script
-- 🎯 **5 prop firms** - My Funded Futures, Lucid Trading, Apex, Tradeify, Funding Ticks
+- 🎯 **4 prop firms** - My Funded Futures, Lucid Trading, Apex, Tradeify
 
 ### 🧪 **Archivos de prueba:**
 - `test-simple.html` - Página minimalista para testing rápido
@@ -136,7 +136,6 @@
 - **Lucid Trading**: LAB (40% OFF) 
 - **Apex Trader Funding**: LAB (80% OFF)
 - **Tradeify**: LAB (35% OFF)
-- **Funding Ticks**: LAB (10% OFF)
 
 ---
 

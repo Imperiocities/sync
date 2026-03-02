@@ -46,31 +46,36 @@
   const PARTNER_NAME = 'Alpha Futures';
   const ADAPTER_VERSION = '1.0.0';
   const STORAGE_KEY = '__pfc_alphafutures_data';
-  
+  const DEBUG = false;
+
   // Store original console.log for our own logging
   const originalLog = console.log;
-  
-  originalLog.call(console, `[AlphaFutures] 🚀 Adapter v${ADAPTER_VERSION} loaded on ${window.location.href}`);
+
+  function log(...args) {
+    if (DEBUG) log('[AF]', ...args);
+  }
+
+  log(`🚀 Adapter v${ADAPTER_VERSION} loaded on ${window.location.href}`);
   
   // ═══════════════════════════════════════════════════════════════════
   // SAFECHARGE/NUVEI DOMAIN - Capture URL params and store
   // ═══════════════════════════════════════════════════════════════════
   
   if (isSafecharge) {
-    originalLog.call(console, '[AlphaFutures] 💳 Payment page detected');
+    log('[AF] 💳 Payment page detected');
     
     // Define the tracker function BEFORE calling it
     function showPaymentPageTracker(data) {
       // Wait for TrackerUI to be available
       const waitForTracker = () => {
         if (typeof window.TrackerUI === 'undefined') {
-          originalLog.call(console, '[AlphaFutures] ⏳ Waiting for TrackerUI...');
+          log('[AF] ⏳ Waiting for TrackerUI...');
           setTimeout(waitForTracker, 500);
           return;
         }
         
-        originalLog.call(console, '[AlphaFutures] ✅ TrackerUI available, showing tracker');
-        originalLog.call(console, '[AlphaFutures] 📦 Data to display:', data);
+        log('[AF] ✅ TrackerUI available, showing tracker');
+        log('[AF] 📦 Data to display:', data);
         
         const tracker = new window.TrackerUI({
           partner: PARTNER,
@@ -99,12 +104,10 @@
             tracker.updateField('product', data.account_size);
           }
           if (data.final_price) {
-            // Show with original price if we have discount
-            if (data.original_price && data.original_price > data.final_price) {
-              tracker.updateField('price', `$${data.final_price} (was $${data.original_price})`);
-            } else {
-              tracker.updateField('price', `$${data.final_price}`);
-            }
+            const priceDisplay = (data.original_price && data.original_price > data.final_price)
+              ? tracker.formatPrice(data.original_price, data.final_price)
+              : tracker.formatPrice(null, data.final_price);
+            tracker.updateField('price', priceDisplay);
           }
           if (data.email) {
             tracker.updateField('email', data.email);
@@ -125,9 +128,9 @@
               messageEl.style.padding = '10px 12px';
               messageEl.style.fontSize = '11px';
               messageEl.style.textAlign = 'center';
-              originalLog.call(console, '[AlphaFutures] ✅ Security message displayed');
+              log('[AF] ✅ Security message displayed');
             } else {
-              originalLog.call(console, '[AlphaFutures] ⚠️ Message element not found');
+              log('[AF] ⚠️ Message element not found');
             }
           }, 100);
         }
@@ -141,7 +144,7 @@
             // Check if status got reset
             const statusText = tracker.element.querySelector('.pfc-tracker-status-text');
             if (statusText && !statusText.textContent.includes('Waiting')) {
-              originalLog.call(console, '[AlphaFutures] 🔄 Restoring tracker status...');
+              log('[AF] 🔄 Restoring tracker status...');
               updatePaymentTracker();
             }
           }
@@ -167,13 +170,13 @@
       plan_id: urlParams.get('planId')
     };
     
-    originalLog.call(console, '[AlphaFutures] 📦 Data from URL:', urlData);
+    log('[AF] 📦 Data from URL:', urlData);
     
     // Use chrome.storage.local (shared across domains) to get checkout data
     if (typeof chrome !== 'undefined' && chrome.storage) {
       chrome.storage.local.get([STORAGE_KEY], (result) => {
         let storedData = result[STORAGE_KEY] || {};
-        originalLog.call(console, '[AlphaFutures] 📥 Restored data from chrome.storage:', storedData);
+        log('[AF] 📥 Restored data from chrome.storage:', storedData);
         
         // Merge: URL params take precedence, but keep checkout data (coupon, original_price)
         const mergedData = {
@@ -194,19 +197,19 @@
           captured_at: Date.now()
         };
         
-        originalLog.call(console, '[AlphaFutures] 📦 Merged data for payment page:', mergedData);
+        log('[AF] 📦 Merged data for payment page:', mergedData);
         
         // Store merged data for success page (in chrome.storage for cross-domain)
         chrome.storage.local.set({ [STORAGE_KEY]: mergedData });
         
-        originalLog.call(console, '[AlphaFutures] ✅ Data stored for success page');
+        log('[AF] ✅ Data stored for success page');
         
         // Show tracker UI with merged data
         showPaymentPageTracker(mergedData);
       });
     } else {
       // Fallback if chrome.storage not available
-      originalLog.call(console, '[AlphaFutures] ⚠️ chrome.storage not available');
+      log('[AF] ⚠️ chrome.storage not available');
       showPaymentPageTracker(urlData);
     }
     
@@ -272,7 +275,7 @@
 
       // Handle coupon applied event
       if (detail.type === 'coupon_applied' && d.response) {
-        originalLog.call(console, '[AlphaFutures] Coupon applied via network:', d.response);
+        log('[AF] Coupon applied via network:', d.response);
         if (d.response.coupon_applied) {
           purchaseData.coupon_code = d.response.coupon_applied;
         }
@@ -289,7 +292,7 @@
         updateTrackerUI();
       }
     } catch (err) {
-      originalLog.call(console, '[AlphaFutures] Error processing network event:', err);
+      log('[AF] Error processing network event:', err);
     }
   });
 
@@ -299,26 +302,26 @@
 
     // /user/billing/address/ - user profile data
     if (urlLower.includes('/user/billing/address')) {
-      originalLog.call(console, '[AlphaFutures] Processing billing address response');
+      log('[AF] Processing billing address response');
       // Response is an array
       const address = Array.isArray(data) ? data[0] : data;
       if (address) {
         networkData.billingAddress = address;
         if (address.email && !purchaseData.email) {
           purchaseData.email = address.email;
-          originalLog.call(console, '[AlphaFutures] Email from API:', purchaseData.email);
+          log('[AF] Email from API:', purchaseData.email);
         }
         if (address.first_name || address.last_name) {
           purchaseData.customer_name = [address.first_name, address.last_name].filter(Boolean).join(' ');
-          originalLog.call(console, '[AlphaFutures] Name from API:', purchaseData.customer_name);
+          log('[AF] Name from API:', purchaseData.customer_name);
         }
         if (address.number && !purchaseData.phone) {
           purchaseData.phone = address.number;
-          originalLog.call(console, '[AlphaFutures] Phone from API:', purchaseData.phone);
+          log('[AF] Phone from API:', purchaseData.phone);
         }
         if (address.profile && !purchaseData.user_id) {
           purchaseData.user_id = String(address.profile);
-          originalLog.call(console, '[AlphaFutures] User ID (profile) from API:', purchaseData.user_id);
+          log('[AF] User ID (profile) from API:', purchaseData.user_id);
         }
         networkData.lastNetworkUpdate = Date.now();
         updateTrackerUI();
@@ -328,19 +331,19 @@
 
     // /payment/final-price/ - pricing and coupon data
     if (urlLower.includes('/payment/final-price')) {
-      originalLog.call(console, '[AlphaFutures] Processing final-price response:', data);
+      log('[AF] Processing final-price response:', data);
       networkData.finalPrice = data;
       if (data.coupon_applied) {
         purchaseData.coupon_code = data.coupon_applied;
-        originalLog.call(console, '[AlphaFutures] Coupon from API:', purchaseData.coupon_code);
+        log('[AF] Coupon from API:', purchaseData.coupon_code);
       }
       if (data.actual_price) {
         purchaseData.original_price = parseFloat(data.actual_price);
-        originalLog.call(console, '[AlphaFutures] Original price from API:', purchaseData.original_price);
+        log('[AF] Original price from API:', purchaseData.original_price);
       }
       if (data.final_price) {
         purchaseData.final_price = parseFloat(data.final_price);
-        originalLog.call(console, '[AlphaFutures] Final price from API:', purchaseData.final_price);
+        log('[AF] Final price from API:', purchaseData.final_price);
       }
       if (data.discount) {
         purchaseData.discount_amount = parseFloat(data.discount);
@@ -348,7 +351,7 @@
         if (purchaseData.original_price && purchaseData.original_price > 0) {
           purchaseData.discount_percent = Math.round((purchaseData.discount_amount / purchaseData.original_price) * 100);
         }
-        originalLog.call(console, '[AlphaFutures] Discount from API:', purchaseData.discount_amount, '(' + purchaseData.discount_percent + '%)');
+        log('[AF] Discount from API:', purchaseData.discount_amount, '(' + purchaseData.discount_percent + '%)');
       }
       networkData.lastNetworkUpdate = Date.now();
       updateTrackerUI();
@@ -371,7 +374,7 @@
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
-        originalLog.call(console, '[AlphaFutures] 📥 Restored data from payment page:', data);
+        log('[AF] 📥 Restored data from payment page:', data);
         
         if (data.email) purchaseData.email = data.email;
         if (data.customer_name) purchaseData.customer_name = data.customer_name;
@@ -385,7 +388,7 @@
         return true;
       }
     } catch (e) {
-      originalLog.call(console, '[AlphaFutures] ⚠️ Error restoring data:', e.message);
+      log('[AF] ⚠️ Error restoring data:', e.message);
     }
     return false;
   }
@@ -396,7 +399,7 @@
       chrome.storage.local.get([STORAGE_KEY], (result) => {
         if (result[STORAGE_KEY]) {
           const data = result[STORAGE_KEY];
-          originalLog.call(console, '[AlphaFutures] 📥 Restored data from chrome.storage:', data);
+          log('[AF] 📥 Restored data from chrome.storage:', data);
           
           // Restore ALL fields, not just some!
           if (data.email && !purchaseData.email) purchaseData.email = data.email;
@@ -427,7 +430,7 @@
     if (typeof chrome !== 'undefined' && chrome.storage) {
       chrome.storage.local.remove([STORAGE_KEY]);
     }
-    originalLog.call(console, '[AlphaFutures] 🗑️ Cleared stored payment data');
+    log('[AF] 🗑️ Cleared stored payment data');
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -442,11 +445,11 @@
     // Check for sortedNumbers log (contains plan pricing)
     try {
       if (args[0] === 'sortedNumbers' && Array.isArray(args[1])) {
-        originalLog.call(console, '[AlphaFutures] 📊 Intercepted plan pricing data');
+        log('[AF] 📊 Intercepted plan pricing data');
         args[1].forEach(plan => {
           if (plan.name && plan.price) {
             basePrices[plan.name] = parseFloat(plan.price);
-            originalLog.call(console, `[AlphaFutures]    ${plan.name}: $${plan.price}`);
+            log(`[AF]    ${plan.name}: $${plan.price}`);
           }
         });
       }
@@ -474,13 +477,13 @@
         
         if (coupon) {
           purchaseData.coupon_code = coupon.toUpperCase();
-          originalLog.call(console, '[AlphaFutures] 🎫 Coupon captured:', purchaseData.coupon_code);
+          log('[AF] 🎫 Coupon captured:', purchaseData.coupon_code);
           updateTrackerUI();
         }
         
         if (paymentType) {
           purchaseData.account_type = paymentType;
-          originalLog.call(console, '[AlphaFutures] 📦 Account type:', purchaseData.account_type);
+          log('[AF] 📦 Account type:', purchaseData.account_type);
         }
       }
       
@@ -494,7 +497,7 @@
         const email = urlObj.searchParams.get('email');
         if (email) {
           purchaseData.email = email;
-          originalLog.call(console, '[AlphaFutures] 📧 Email captured:', purchaseData.email);
+          log('[AF] 📧 Email captured:', purchaseData.email);
         }
         
         // Account size (item_name_1)
@@ -502,12 +505,12 @@
         if (itemName) {
           purchaseData.account_size = itemName;
           purchaseData.product_name = itemName; // Use account size as product name
-          originalLog.call(console, '[AlphaFutures] 📦 Account size:', purchaseData.account_size);
+          log('[AF] 📦 Account size:', purchaseData.account_size);
           
           // Look up base price
           if (basePrices[itemName]) {
             purchaseData.original_price = basePrices[itemName];
-            originalLog.call(console, '[AlphaFutures] 💰 Original price from lookup:', purchaseData.original_price);
+            log('[AF] 💰 Original price from lookup:', purchaseData.original_price);
           }
         }
         
@@ -515,7 +518,7 @@
         const totalAmount = urlObj.searchParams.get('total_amount');
         if (totalAmount) {
           purchaseData.final_price = parseFloat(totalAmount);
-          originalLog.call(console, '[AlphaFutures] 💵 Final price:', purchaseData.final_price);
+          log('[AF] 💵 Final price:', purchaseData.final_price);
           
           // If no original price from lookup, use final price
           if (!purchaseData.original_price) {
@@ -527,7 +530,7 @@
             purchaseData.discount_percent = Math.round(
               ((purchaseData.original_price - purchaseData.final_price) / purchaseData.original_price) * 100
             );
-            originalLog.call(console, '[AlphaFutures] 🏷️ Discount:', purchaseData.discount_percent + '%');
+            log('[AF] 🏷️ Discount:', purchaseData.discount_percent + '%');
           }
         }
         
@@ -535,7 +538,7 @@
         const userId = urlObj.searchParams.get('userid');
         if (userId) {
           purchaseData.user_id = userId;
-          originalLog.call(console, '[AlphaFutures] 👤 User ID:', purchaseData.user_id);
+          log('[AF] 👤 User ID:', purchaseData.user_id);
         }
         
         updateTrackerUI();
@@ -543,7 +546,7 @@
       }
       
     } catch (e) {
-      originalLog.call(console, '[AlphaFutures] ⚠️ Error processing URL:', e.message);
+      log('[AF] ⚠️ Error processing URL:', e.message);
     }
   }
   
@@ -588,8 +591,8 @@
       
       if (transactionId && !purchaseComplete) {
         purchaseData.transaction_id = transactionId;
-        originalLog.call(console, '[AlphaFutures] ✅ SUCCESS PAGE DETECTED!');
-        originalLog.call(console, '[AlphaFutures] 🆔 Transaction ID:', transactionId);
+        log('[AF] ✅ SUCCESS PAGE DETECTED!');
+        log('[AF] 🆔 Transaction ID:', transactionId);
         
         purchaseComplete = true;
         
@@ -604,7 +607,7 @@
         // Also try chrome.storage, then submit
         restoreFromChromeStorage(() => {
           updateTrackerUI();
-          originalLog.call(console, '[AlphaFutures] 📦 Final data before submit:', purchaseData);
+          log('[AF] 📦 Final data before submit:', purchaseData);
           
           // Submit after short delay
           setTimeout(() => {
@@ -621,7 +624,7 @@
   
   function initTrackerUI() {
     if (typeof window.TrackerUI === 'undefined') {
-      originalLog.call(console, '[AlphaFutures] ⚠️ TrackerUI not available, retrying...');
+      log('[AF] ⚠️ TrackerUI not available, retrying...');
       setTimeout(initTrackerUI, 500);
       return null;
     }
@@ -642,7 +645,7 @@
     });
     
     window.__pfcTracker = tracker;
-    originalLog.call(console, '[AlphaFutures] ✅ TrackerUI initialized');
+    log('[AF] ✅ TrackerUI initialized');
     return tracker;
   }
   
@@ -672,9 +675,9 @@
     }
     
     if (purchaseData.final_price) {
-      const priceDisplay = purchaseData.original_price && purchaseData.original_price > purchaseData.final_price
-        ? `$${purchaseData.final_price} (was $${purchaseData.original_price})`
-        : `$${purchaseData.final_price}`;
+      const priceDisplay = (purchaseData.original_price && purchaseData.original_price > purchaseData.final_price)
+        ? t.formatPrice(purchaseData.original_price, purchaseData.final_price)
+        : t.formatPrice(null, purchaseData.final_price);
       t.updateField('price', priceDisplay);
     }
     
@@ -701,12 +704,12 @@
   
   function submitPurchase() {
     if (captureStatus === 'submitting') {
-      originalLog.call(console, '[AlphaFutures] ⏭️ Already submitting, skipping');
+      log('[AF] ⏭️ Already submitting, skipping');
       return;
     }
     
     if (!purchaseData.transaction_id) {
-      originalLog.call(console, '[AlphaFutures] ❌ Cannot submit - missing transaction ID');
+      log('[AF] ❌ Cannot submit - missing transaction ID');
       return;
     }
     
@@ -715,14 +718,14 @@
       const syncedEmail = stored.email?.toLowerCase()?.trim();
       const websiteEmail = purchaseData.email?.toLowerCase()?.trim();
       
-      originalLog.call(console, '[AlphaFutures] 📧 Email check - Synced:', syncedEmail || '(not set)', '| Website:', websiteEmail);
+      log('[AF] 📧 Email check - Synced:', syncedEmail || '(not set)', '| Website:', websiteEmail);
       
       // Logic:
       // - No synced email → Push (website can set email later)
       // - Synced email matches → Push
       // - Synced email doesn't match → Block
       if (syncedEmail && websiteEmail && syncedEmail !== websiteEmail) {
-        originalLog.call(console, '[AlphaFutures] ❌ Email mismatch! Synced:', syncedEmail, '≠ Website:', websiteEmail);
+        log('[AF] ❌ Email mismatch! Synced:', syncedEmail, '≠ Website:', websiteEmail);
         setStatus('error', 'Email mismatch');
         const t = tracker || window.__pfcTracker;
         if (t) {
@@ -732,9 +735,9 @@
       }
       
       if (!syncedEmail) {
-        originalLog.call(console, '[AlphaFutures] ℹ️ No synced email - will push with website email');
+        log('[AF] ℹ️ No synced email - will push with website email');
       } else {
-        originalLog.call(console, '[AlphaFutures] ✅ Emails match - proceeding');
+        log('[AF] ✅ Emails match - proceeding');
       }
       
       doSubmit();
@@ -743,7 +746,7 @@
   
   function doSubmit() {
     setStatus('submitting', 'Submitting to API...');
-    
+
     const payload = {
       partner: PARTNER,
       email: purchaseData.email,
@@ -753,8 +756,8 @@
       account_type: purchaseData.account_type,
       original_price: purchaseData.original_price,
       final_price: purchaseData.final_price,
-      discount_amount: purchaseData.original_price && purchaseData.final_price 
-        ? purchaseData.original_price - purchaseData.final_price 
+      discount_amount: purchaseData.original_price && purchaseData.final_price
+        ? purchaseData.original_price - purchaseData.final_price
         : null,
       discount_percent: purchaseData.discount_percent,
       coupon_code: purchaseData.coupon_code,
@@ -763,60 +766,135 @@
       user_id: purchaseData.user_id,
       checkout_url: window.location.href
     };
-    
-    originalLog.call(console, '[AlphaFutures] 📤 Submitting:', JSON.stringify(payload, null, 2));
-    
-    // First capture
-    chrome.runtime.sendMessage({
-      action: 'CAPTURE_PURCHASE',
-      data: payload
-    }, (captureResponse) => {
-      if (chrome.runtime.lastError) {
-        originalLog.call(console, '[AlphaFutures] ❌ Capture error:', chrome.runtime.lastError);
-        setStatus('error', 'Error submitting');
-        return;
-      }
-      
-      originalLog.call(console, '[AlphaFutures] ✅ Captured:', captureResponse);
-      
-      // Then trigger success
+
+    log('[AF] 📤 Submitting:', JSON.stringify(payload, null, 2));
+
+    const successPayload = {
+      partner: PARTNER,
+      order_number: purchaseData.transaction_id,
+      email: purchaseData.email,
+      coupon_code: purchaseData.coupon_code,
+      successData: payload
+    };
+
+    // First capture with retries
+    let captureRetries = 0;
+    const MAX_CAPTURE_RETRIES = 3;
+
+    function sendCapture() {
       chrome.runtime.sendMessage({
-        action: 'SUCCESS_DETECTED',
-        data: {
-          partner: PARTNER,
-          order_number: purchaseData.transaction_id,
-          email: purchaseData.email,
-          coupon_code: purchaseData.coupon_code,
-          successData: payload
-        }
-      }, (successResponse) => {
+        action: 'CAPTURE_PURCHASE',
+        data: payload
+      }, (captureResponse) => {
         if (chrome.runtime.lastError) {
-          originalLog.call(console, '[AlphaFutures] ❌ Success trigger error:', chrome.runtime.lastError);
+          log('[AF] ❌ Capture error:', chrome.runtime.lastError.message, '(attempt', captureRetries + 1 + ')');
+          captureRetries++;
+          if (captureRetries < MAX_CAPTURE_RETRIES) {
+            log('[AF] 🔄 Retrying capture in', captureRetries * 2, 'seconds...');
+            setTimeout(sendCapture, captureRetries * 2000);
+          } else {
+            log('[AF] ❌ Capture failed after', MAX_CAPTURE_RETRIES, 'attempts');
+            setStatus('error', 'Capture failed — reload page and retry');
+          }
           return;
         }
-        
-        originalLog.call(console, '[AlphaFutures] ✅ Success response:', successResponse);
-        
-        // Clear stored payment data
-        clearStoredData();
-        
-        const t = tracker || window.__pfcTracker;
-        if (t) {
-          if (successResponse?.skipped) {
-            setStatus('success', 'Already tracked');
-            t.showMessage('success', 'This purchase was already tracked!');
-          } else if (successResponse?.success) {
-            setStatus('success', 'Reward tracked!');
-            t.showMessage('success', 'Your purchase has been submitted for rewards! 🎉');
+        if (captureResponse?.success) {
+          log('[AF] ✅ Captured:', captureResponse);
+          // Then trigger success with retries
+          sendSuccess();
+        } else {
+          log('[AF] ❌ Capture returned failure:', captureResponse?.error);
+          captureRetries++;
+          if (captureRetries < MAX_CAPTURE_RETRIES) {
+            log('[AF] 🔄 Retrying capture in', captureRetries * 2, 'seconds...');
+            setTimeout(sendCapture, captureRetries * 2000);
+          } else {
+            log('[AF] ❌ Capture failed after', MAX_CAPTURE_RETRIES, 'attempts');
+            setStatus('error', 'Capture failed — reload page and retry');
           }
         }
-        
-        // Reset for potential next purchase after delay
-        setTimeout(() => {
-          resetForNextPurchase();
-        }, 5000);
       });
-    });
+    }
+
+    let successRetries = 0;
+    const MAX_SUCCESS_RETRIES = 5;
+
+    function sendSuccess() {
+      chrome.runtime.sendMessage({
+        action: 'SUCCESS_DETECTED',
+        data: successPayload
+      }, (successResponse) => {
+        if (chrome.runtime.lastError) {
+          log('[AF] ❌ SUCCESS_DETECTED error:', chrome.runtime.lastError.message, '(attempt', successRetries + 1 + ')');
+          successRetries++;
+          if (successRetries < MAX_SUCCESS_RETRIES) {
+            const delay = successRetries * 2000;
+            log('[AF] 🔄 Retrying SUCCESS_DETECTED in', delay / 1000, 'seconds...');
+            setStatus('waiting', 'Submitting... (retry ' + successRetries + ')');
+            setTimeout(sendSuccess, delay);
+          } else {
+            log('[AF] ❌ SUCCESS_DETECTED failed after', MAX_SUCCESS_RETRIES, 'attempts');
+            setStatus('error', 'Tracking failed — check extension login');
+            log('[AF] 💾 Saving to persistent retry storage...');
+            chrome.storage.local.set({
+              pfc_alpha_stuck_purchase: {
+                data: successPayload,
+                timestamp: Date.now(),
+                retries: 0,
+                order_number: purchaseData.transaction_id
+              }
+            });
+          }
+          return;
+        }
+
+        log('[AF] ✅ Success response:', successResponse);
+
+        if (successResponse?.success) {
+          // Clear stored payment data
+          clearStoredData();
+
+          const t = tracker || window.__pfcTracker;
+          if (t) {
+            if (successResponse?.skipped) {
+              setStatus('success', 'Already tracked');
+              t.showMessage('success', 'This purchase was already tracked!');
+            } else {
+              setStatus('success', 'Reward tracked!');
+              t.showMessage('success', 'Your purchase has been submitted for rewards! 🎉');
+            }
+          }
+
+          // Reset for potential next purchase after delay
+          setTimeout(() => {
+            resetForNextPurchase();
+          }, 5000);
+        } else {
+          log('[AF] ❌ SUCCESS_DETECTED returned failure:', successResponse?.error, '(attempt', successRetries + 1 + ')');
+          successRetries++;
+          if (successRetries < MAX_SUCCESS_RETRIES) {
+            const delay = successRetries * 2000;
+            log('[AF] 🔄 Retrying SUCCESS_DETECTED in', delay / 1000, 'seconds...');
+            setStatus('waiting', 'Submitting... (retry ' + successRetries + ')');
+            setTimeout(sendSuccess, delay);
+          } else {
+            log('[AF] ❌ SUCCESS_DETECTED failed after', MAX_SUCCESS_RETRIES, 'attempts — error:', successResponse?.error);
+            setStatus('error', successResponse?.error || 'Tracking failed');
+            log('[AF] 💾 Saving to persistent retry storage...');
+            chrome.storage.local.set({
+              pfc_alpha_stuck_purchase: {
+                data: successPayload,
+                timestamp: Date.now(),
+                retries: 0,
+                order_number: purchaseData.transaction_id
+              }
+            });
+          }
+        }
+      });
+    }
+
+    sendCapture();
   }
   
   function resetForNextPurchase() {
@@ -855,7 +933,7 @@
       }
     }
     
-    originalLog.call(console, '[AlphaFutures] 🔄 Reset for next purchase');
+    log('[AF] 🔄 Reset for next purchase');
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -875,7 +953,7 @@
           const newCoupon = input.value.toUpperCase();
           if (newCoupon !== purchaseData.coupon_code) {
             purchaseData.coupon_code = newCoupon;
-            originalLog.call(console, '[AlphaFutures] 🎫 Coupon from DOM:', purchaseData.coupon_code);
+            log('[AF] 🎫 Coupon from DOM:', purchaseData.coupon_code);
             foundNew = true;
           }
           break;
@@ -889,7 +967,7 @@
           const newCoupon = appliedMatch[1].toUpperCase();
           if (newCoupon !== purchaseData.coupon_code) {
             purchaseData.coupon_code = newCoupon;
-            originalLog.call(console, '[AlphaFutures] 🎫 Coupon from Applied badge:', purchaseData.coupon_code);
+            log('[AF] 🎫 Coupon from Applied badge:', purchaseData.coupon_code);
             foundNew = true;
           }
         }
@@ -903,7 +981,7 @@
           const oldSize = purchaseData.account_size;
           purchaseData.account_size = newSize;
           purchaseData.product_name = newSize;
-          originalLog.call(console, '[AlphaFutures] 📦 Account size changed:', oldSize, '→', purchaseData.account_size);
+          log('[AF] 📦 Account size changed:', oldSize, '→', purchaseData.account_size);
           foundNew = true;
           
           // Reset prices when account size changes - they'll be recaptured
@@ -911,12 +989,10 @@
           purchaseData.final_price = null;
           purchaseData.discount_percent = null;
           
-          // Plan change often clears coupon - re-apply after short delay
+          // Plan change clears coupon - always re-apply
           if (oldSize) {
-            originalLog.call(console, '[AlphaFutures] 🔄 Plan changed - will re-apply coupon if needed');
-            setTimeout(() => {
-              checkAndReapplyCoupon();
-            }, 1000);
+            log('[AF] 🔄 Plan changed - re-applying coupon');
+            reapplyCouponForPlanChange();
           }
         }
       }
@@ -928,15 +1004,13 @@
         if (newType !== purchaseData.account_type) {
           const oldType = purchaseData.account_type;
           purchaseData.account_type = newType;
-          originalLog.call(console, '[AlphaFutures] 📋 Account type changed:', oldType, '→', purchaseData.account_type);
+          log('[AF] 📋 Account type changed:', oldType, '→', purchaseData.account_type);
           foundNew = true;
           
-          // Account type change may also clear coupon
+          // Account type change clears coupon - always re-apply
           if (oldType) {
-            originalLog.call(console, '[AlphaFutures] 🔄 Account type changed - will re-apply coupon if needed');
-            setTimeout(() => {
-              checkAndReapplyCoupon();
-            }, 1000);
+            log('[AF] 🔄 Account type changed - re-applying coupon');
+            reapplyCouponForPlanChange();
           }
         }
       }
@@ -948,7 +1022,7 @@
         const newPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
         if (newPrice !== purchaseData.original_price) {
           purchaseData.original_price = newPrice;
-          originalLog.call(console, '[AlphaFutures] 💰 Original price:', purchaseData.original_price);
+          log('[AF] 💰 Original price:', purchaseData.original_price);
           foundNew = true;
         }
       }
@@ -959,7 +1033,7 @@
         const newTotal = parseFloat(totalMatch[1].replace(/,/g, ''));
         if (newTotal !== purchaseData.final_price) {
           purchaseData.final_price = newTotal;
-          originalLog.call(console, '[AlphaFutures] 💵 Final price:', purchaseData.final_price);
+          log('[AF] 💵 Final price:', purchaseData.final_price);
           foundNew = true;
         }
       }
@@ -969,7 +1043,7 @@
         const emailMatch = pageText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
         if (emailMatch) {
           purchaseData.email = emailMatch[1];
-          originalLog.call(console, '[AlphaFutures] 📧 Email from DOM:', purchaseData.email);
+          log('[AF] 📧 Email from DOM:', purchaseData.email);
           foundNew = true;
         }
       }
@@ -982,7 +1056,7 @@
           );
           if (newDiscount !== purchaseData.discount_percent) {
             purchaseData.discount_percent = newDiscount;
-            originalLog.call(console, '[AlphaFutures] 🏷️ Discount:', purchaseData.discount_percent + '%');
+            log('[AF] 🏷️ Discount:', purchaseData.discount_percent + '%');
             foundNew = true;
           }
         }
@@ -996,7 +1070,7 @@
       
       return foundNew;
     } catch (e) {
-      originalLog.call(console, '[AlphaFutures] ⚠️ Error extracting from DOM:', e.message);
+      log('[AF] ⚠️ Error extracting from DOM:', e.message);
       return false;
     }
   }
@@ -1005,109 +1079,96 @@
   // AUTOFILL FUNCTIONALITY
   // ═══════════════════════════════════════════════════════════════════
   
-  // Check if coupon is still applied, re-apply if cleared (e.g., after plan change)
-  async function checkAndReapplyCoupon() {
-    const pageText = document.body?.innerText || '';
-    const referralCode = localStorage.getItem('urlReferralCode') || 'LAB';
-    
-    // Check if coupon is still showing as applied
-    const hasAppliedBadge = pageText.includes('Applied') && pageText.includes(referralCode);
-    
-    // Check if coupon input has a value
-    const couponInputs = document.querySelectorAll('input[placeholder*="coupon" i], input[placeholder*="code" i]');
-    let inputHasValue = false;
-    for (const input of couponInputs) {
-      if (input.value && input.value.length > 0) {
-        inputHasValue = true;
-        break;
+  // Re-apply coupon after plan/type change — always re-apply, don't guess
+  let reapplyTimer = null;
+  function reapplyCouponForPlanChange() {
+    // Debounce rapid switches — only fire once after user stops clicking
+    if (reapplyTimer) clearTimeout(reapplyTimer);
+    reapplyTimer = setTimeout(() => {
+      reapplyTimer = null;
+
+      // 1. Fire API path via net intercept (server-side, fast)
+      const planId = (window.location.pathname.match(/checkout\/(\d+)/i) || [])[1];
+      if (planId) {
+        log('[AF] ⚡ API coupon re-apply for plan:', planId);
+        document.dispatchEvent(new CustomEvent('__pfc_af_reapply_coupon', {
+          detail: JSON.stringify({ planId: planId })
+        }));
       }
-    }
-    
-    // If coupon is NOT applied, re-apply it
-    if (!hasAppliedBadge && !inputHasValue) {
-      originalLog.call(console, '[AlphaFutures] 🔄 Coupon was cleared - re-applying...');
-      
-      // Clear the stored coupon so autofill will re-apply
+
+      // 2. Also re-fill the DOM input (visual update)
       purchaseData.coupon_code = null;
-      
-      // Re-run autofill
-      await tryAutofill();
-    } else {
-      originalLog.call(console, '[AlphaFutures] ✅ Coupon still applied');
-    }
+      tryAutofill();
+    }, 500);
   }
-  
+
   async function tryAutofill() {
     // Only on checkout pages
-    if (!window.location.pathname.includes('checkout') && 
+    if (!window.location.pathname.includes('checkout') &&
         !window.location.pathname.includes('Assessments-checkout')) {
       return;
     }
-    
+
     // Check if LAB code should be applied
     const referralCode = localStorage.getItem('urlReferralCode') || 'LAB';
-    
-    originalLog.call(console, '[AlphaFutures] 🔧 Attempting autofill with code:', referralCode);
-    
+
+    log('[AF] 🔧 Attempting autofill with code:', referralCode);
+
     // Wait for coupon field to appear
     const couponInput = await waitForElement("input[placeholder='Enter Coupon Code'], input[placeholder*='coupon' i], input[name*='coupon' i]", 5000);
-    
+
     if (!couponInput) {
-      originalLog.call(console, '[AlphaFutures] ⚠️ Coupon input not found');
+      log('[AF] ⚠️ Coupon input not found');
       return;
     }
-    
+
     // Check if already filled
     if (couponInput.value && couponInput.value.length > 0) {
-      originalLog.call(console, '[AlphaFutures] ℹ️ Coupon field already has value:', couponInput.value);
+      log('[AF] ℹ️ Coupon field already has value:', couponInput.value);
       // Capture the existing coupon code
       if (!purchaseData.coupon_code) {
         purchaseData.coupon_code = couponInput.value.toUpperCase();
-        originalLog.call(console, '[AlphaFutures] 🎫 Captured existing coupon:', purchaseData.coupon_code);
+        log('[AF] 🎫 Captured existing coupon:', purchaseData.coupon_code);
         updateTrackerUI();
         // Store to localStorage for Safecharge page
         storeCheckoutData();
       }
       return;
     }
-    
+
     // Fill the coupon code
     couponInput.focus();
     couponInput.value = referralCode;
     couponInput.dispatchEvent(new Event('input', { bubbles: true }));
     couponInput.dispatchEvent(new Event('change', { bubbles: true }));
     couponInput.dispatchEvent(new Event('blur', { bubbles: true }));
-    
-    originalLog.call(console, '[AlphaFutures] ✅ Filled coupon code:', referralCode);
-    
-    // Look for apply button
-    await sleep(500);
-    
-    const applyButton = document.querySelector("button");
+
+    log('[AF] ✅ Filled coupon code:', referralCode);
+
+    // Click apply button immediately — it's in the same form as the input
     const buttons = document.querySelectorAll('button');
-    
     for (const btn of buttons) {
       const text = btn.textContent?.toLowerCase() || '';
       if (text.includes('apply')) {
         btn.click();
-        originalLog.call(console, '[AlphaFutures] ✅ Clicked apply button');
-        
+        log('[AF] ✅ Clicked apply button');
+
         // Capture the coupon code we just applied
         purchaseData.coupon_code = referralCode.toUpperCase();
         updateTrackerUI();
         // Store to localStorage for Safecharge page
         storeCheckoutData();
-        
+
         const t = tracker || window.__pfcTracker;
         if (t) {
           t.setAutoFillStatus('success', `Code "${referralCode}" applied`);
         }
-        
+
         // Extract other data from DOM after coupon is applied
         setTimeout(() => {
           extractFromDOM();
         }, 1500);
-        
+
         break;
       }
     }
@@ -1132,12 +1193,12 @@
     // Use chrome.storage.local (shared across domains) instead of localStorage
     if (typeof chrome !== 'undefined' && chrome.storage) {
       chrome.storage.local.set({ [STORAGE_KEY]: dataToStore }, () => {
-        originalLog.call(console, '[AlphaFutures] 💾 Stored checkout data to chrome.storage:', dataToStore);
+        log('[AF] 💾 Stored checkout data to chrome.storage:', dataToStore);
       });
     } else {
       // Fallback to localStorage (won't work cross-domain but better than nothing)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToStore));
-      originalLog.call(console, '[AlphaFutures] 💾 Stored checkout data to localStorage:', dataToStore);
+      log('[AF] 💾 Stored checkout data to localStorage:', dataToStore);
     }
   }
   
@@ -1182,7 +1243,7 @@
   let trackerShown = false;
   
   function init() {
-    originalLog.call(console, '[AlphaFutures] 🎬 Initializing adapter...');
+    log('[AF] 🎬 Initializing adapter...');
     
     // Initialize TrackerUI (but don't show yet)
     initTrackerUI();
@@ -1194,7 +1255,7 @@
     restoreFromChromeStorage(() => {
       // Log restored data
       if (purchaseData.email || purchaseData.account_size) {
-        originalLog.call(console, '[AlphaFutures] 📥 Data restored:', {
+        log('[AF] 📥 Data restored:', {
           email: purchaseData.email,
           account_size: purchaseData.account_size,
           final_price: purchaseData.final_price
@@ -1204,20 +1265,20 @@
     
     // Show tracker immediately if on checkout page
     if (isCheckoutPage()) {
-      originalLog.call(console, '[AlphaFutures] 💳 Checkout page detected');
+      log('[AF] 💳 Checkout page detected');
       showTracker();
       trackerShown = true;
-      
+
       // Extract data from DOM
       setTimeout(() => {
         extractFromDOM();
       }, 1000);
-      
+
       // Try autofill after short delay
       setTimeout(() => {
         tryAutofill();
       }, 1500);
-      
+
       // Then extract again after autofill might have applied
       setTimeout(() => {
         extractFromDOM();
@@ -1239,12 +1300,16 @@
     setInterval(() => {
       if (window.location.href !== lastUrl) {
         lastUrl = window.location.href;
-        originalLog.call(console, '[AlphaFutures] 🔗 URL changed:', lastUrl);
+        log('[AF] 🔗 URL changed:', lastUrl);
         
-        // Show tracker when entering checkout (only once)
-        if (isCheckoutPage() && !trackerShown) {
-          showTracker();
-          trackerShown = true;
+        // Show tracker and autofill when entering checkout
+        if (isCheckoutPage()) {
+          if (!trackerShown) {
+            showTracker();
+            trackerShown = true;
+          }
+          // Always re-trigger autofill on SPA navigation to checkout
+          // (net intercept handles the fast API path separately)
           tryAutofill();
         }
         
@@ -1253,15 +1318,86 @@
     }, 500);
     
     // NO MutationObserver - it was causing infinite loops and crashes
-    
-    originalLog.call(console, '[AlphaFutures] ✅ Adapter initialized');
+
+    // Check for stuck purchases from previous failed submissions
+    chrome.storage.local.get(['pfc_alpha_stuck_purchase'], (stored) => {
+      if (stored.pfc_alpha_stuck_purchase) {
+        const stuck = stored.pfc_alpha_stuck_purchase;
+        if (Date.now() - stuck.timestamp < 24 * 60 * 60 * 1000) { // < 24 hours old
+          log('[AF] 🔄 Found stuck purchase, retrying:', stuck.order_number);
+          chrome.runtime.sendMessage({
+            action: 'SUCCESS_DETECTED',
+            data: stuck.data
+          }, (response) => {
+            if (!chrome.runtime.lastError && response?.success) {
+              log('[AF] ✅ Stuck purchase submitted successfully');
+              chrome.storage.local.remove(['pfc_alpha_stuck_purchase']);
+            } else {
+              log('[AF] ⚠️ Stuck purchase retry failed:', chrome.runtime.lastError?.message || response?.error);
+            }
+          });
+        } else {
+          log('[AF] 🗑️ Removing expired stuck purchase (> 24h old)');
+          chrome.storage.local.remove(['pfc_alpha_stuck_purchase']);
+        }
+      }
+    });
+
+    log('[AF] ✅ Adapter initialized');
   }
-  
+
+  // ═══════════════════════════════════════════════════════════════════
+  // DEBUG INTERFACE
+  // ═══════════════════════════════════════════════════════════════════
+
+  window.alphaDebug = {
+    extract: () => purchaseData,
+    network: () => networkData,
+    networkLog: () => networkData.network_log,
+    status: () => ({
+      isCheckout: isCheckoutPage(),
+      purchaseComplete,
+      captureStatus,
+      transactionId: purchaseData.transaction_id
+    }),
+    exportAll: () => {
+      return JSON.stringify({
+        exportTimestamp: new Date().toISOString(),
+        adapterVersion: ADAPTER_VERSION,
+        url: window.location.href,
+        captureStatus: {
+          purchaseComplete,
+          captureStatus
+        },
+        purchaseData: { ...purchaseData },
+        networkData: {
+          billingAddress: networkData.billingAddress,
+          finalPrice: networkData.finalPrice,
+          lastNetworkUpdate: networkData.lastNetworkUpdate
+        },
+        networkLog: networkData.network_log
+      }, null, 2);
+    },
+    download: () => {
+      const data = window.alphaDebug.exportAll();
+      const txnId = purchaseData.transaction_id || 'unknown';
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pfc-alpha-${txnId}-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
   // Start when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
-  
+
 })();

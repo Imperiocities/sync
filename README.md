@@ -36,7 +36,6 @@ Currently the extension detects and works with:
 - **Apex Trader Funding** (80% OFF) - apextraderfunding.com  
 - **Lucid Trading** (40% OFF) - lucidtrading.com
 - **Tradeify** (35% OFF) - tradeify.co
-- **Funding Ticks** (10% OFF) - fundingticks.com
 - **PropFirm Compare** (20% OFF) - propfirm.compare
 
 All firms use the universal discount code: **LAB**

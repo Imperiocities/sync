@@ -298,7 +298,7 @@
       const debugData = {
         exportVersion: '1.0.0',
         exportTimestamp: new Date().toISOString(),
-        extensionVersion: '2.1.3',
+        extensionVersion: '2.4.0',
         sessionDuration: Date.now() - this.startTime,
         
         pageInfo: this.pageInfo,

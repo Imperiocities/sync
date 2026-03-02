@@ -300,5 +300,6 @@
     origDispatch(type, detail);
   };
 
-  console.log('[PFC-Lucid] Network interceptor installed');
+  var isIframe = (window.self !== window.top);
+  console.log('[PFC-Lucid] Network interceptor installed' + (isIframe ? ' (iframe context)' : ''));
 })();

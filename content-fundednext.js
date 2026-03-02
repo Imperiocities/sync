@@ -25,7 +25,7 @@
 
   const PARTNER = 'fundednext';
   const PARTNER_NAME = 'FundedNext';
-  const DEBUG = true;
+  const DEBUG = false;
   const VERSION = 'v2.0';
   
   function log(...args) {

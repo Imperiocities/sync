@@ -182,19 +182,7 @@ chrome.runtime.sendMessage({
 - [ ] **Verificar**: Secuencia: Click "Add promo code" → Wait 500ms → Fill input → Click "Apply"
 - [ ] **Verificar**: Aparece notificación "✅ Auto-fill Complete!"
 
-**Test 3: Funding Ticks (fundingticks.com)**
-- [ ] **Ir a**: Página con `h3#billing-details-heading`
-- [ ] **Verificar**: Secuencia: Fill inputs → Wait for "Apply" button to be enabled → Click "Apply"
-- [ ] **Verificar**: NO hace click si botón está disabled
-- [ ] **Logs esperados**: 
-  ```
-  📝 Filling input "input#coupon_code" with "LAB"
-  📝 Filling input "input[placeholder='Enter your code']" with "LAB"
-  ⏳ Waiting for element to be enabled (max 3000ms)...
-  ✅ Element is now enabled, proceeding with click
-  ```
-
-**Test 4: My Funded Futures (myfundedfutures.com)**
+**Test 3: My Funded Futures (myfundedfutures.com)**
 - [ ] **Ir a**: Página con `<p>` conteniendo "Payment Type"
 - [ ] **Verificar**: Secuencia: Click link "Add coupon code" → Fill input[placeholder='Coupon code'] → Click "Apply"
 
@@ -212,11 +200,9 @@ chrome.runtime.sendMessage({
 - [ ] **Verificar**: Solo aparece popup recordatorio, NO auto-fill
 - [ ] **Logs esperados**: `🔕 Automatic code filling disabled by user`
 
-**Test 8: Botón disabled (Funding Ticks específico)**
-- [ ] **Ir a fundingticks.com checkout**
-- [ ] **Verificar**: Rellena campos pero espera a que botón "Apply" se habilite
+**Test 7: Botón disabled**
 - [ ] **Verificar**: Si botón permanece disabled por 3 segundos, muestra error
-- [ ] **Logs esperados**: 
+- [ ] **Logs esperados**:
   ```
   ⏳ Waiting for element to be enabled (max 3000ms)...
   ⏳ Element still disabled, waiting... (1s)

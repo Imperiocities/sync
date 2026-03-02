@@ -26,7 +26,7 @@
   const PARTNER = 'myfundedfutures';
   const PARTNER_NAME = 'MyFundedFutures';
   const REQUIRED_COUPON = 'LAB';
-  const DEBUG = true;
+  const DEBUG = false;
   const STORAGE_KEY = 'mff_validated_coupon';
   const VERSION = 'v2.0';
 
@@ -601,56 +601,167 @@
     
     log('✅ Capturing checkout:', data);
     if (tracker) tracker.setStatus('waiting', 'Waiting for payment...');
-    
-    chrome.runtime.sendMessage({ action: 'CAPTURE_PURCHASE', data }, (response) => {
-      if (chrome.runtime.lastError) {
-        log('Error:', chrome.runtime.lastError.message);
-        return;
-      }
-      if (response?.success) {
-        purchaseCaptured = true;
-        log('✅ Queued with fingerprint:', response.fingerprint);
-      }
-    });
+
+    let captureRetries = 0;
+    const MAX_CAPTURE_RETRIES = 3;
+
+    function sendCapture() {
+      chrome.runtime.sendMessage({ action: 'CAPTURE_PURCHASE', data }, (response) => {
+        if (chrome.runtime.lastError) {
+          log('❌ Capture error:', chrome.runtime.lastError.message, '(attempt', captureRetries + 1 + ')');
+          captureRetries++;
+          if (captureRetries < MAX_CAPTURE_RETRIES) {
+            log('🔄 Retrying capture in', captureRetries * 2, 'seconds...');
+            setTimeout(sendCapture, captureRetries * 2000);
+          } else {
+            log('❌ Capture failed after', MAX_CAPTURE_RETRIES, 'attempts');
+            if (tracker) tracker.setStatus('error', 'Capture failed — reload page and retry');
+          }
+          return;
+        }
+        if (response?.success) {
+          purchaseCaptured = true;
+          log('✅ Queued with fingerprint:', response.fingerprint);
+        } else {
+          log('❌ Capture returned failure:', response?.error);
+          captureRetries++;
+          if (captureRetries < MAX_CAPTURE_RETRIES) {
+            log('🔄 Retrying capture in', captureRetries * 2, 'seconds...');
+            setTimeout(sendCapture, captureRetries * 2000);
+          } else {
+            log('❌ Capture failed after', MAX_CAPTURE_RETRIES, 'attempts');
+            if (tracker) tracker.setStatus('error', 'Capture failed — reload page and retry');
+          }
+        }
+      });
+    }
+
+    sendCapture();
   }
   
+  const SUBMITTED_ORDERS_KEY = 'pfc_mffu_submitted_orders';
+  const SUBMITTED_ORDER_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+
   function triggerSuccess() {
     if (hasTriggeredSuccess) return;
     hasTriggeredSuccess = true;
-    
+
     const data = extractSuccessData();
     const validatedCouponCode = getStoredValidatedCoupon();
-    
+
     log('🎉 Success page - Order:', data.order_number);
-    
+
     updateTrackerData(data);
-    
+
     if (!purchaseCaptured && !validatedCouponCode) {
       log('⚠️ Cannot submit: No validated coupon');
       return;
     }
-    
-    chrome.runtime.sendMessage({
-      action: 'SUCCESS_DETECTED',
-      data: {
-        partner: PARTNER,
-        order_number: data.order_number,
-        email: data.email,
-        coupon_code: validatedCouponCode,
-        successData: data
-      }
-    }, (response) => {
-      if (chrome.runtime.lastError) return;
-      
-      if (response?.success) {
-        clearValidatedCoupon();
-        purchaseCaptured = false;
-        
-        if (tracker) {
-          tracker.setStatus('success', response.skipped ? 'Already tracked' : 'Reward tracked!');
+
+    // Check if this order was already submitted (survives page reloads)
+    if (data.order_number) {
+      chrome.storage.local.get([SUBMITTED_ORDERS_KEY], (stored) => {
+        const entries = stored[SUBMITTED_ORDERS_KEY] || [];
+        const alreadySubmitted = entries.some(e => e.orderNumber === data.order_number);
+        if (alreadySubmitted) {
+          log('⏭️ Order already submitted:', data.order_number);
+          if (tracker) tracker.setStatus('success', 'Purchase already tracked');
+          return;
         }
-      }
+        sendSuccessFlow(data, validatedCouponCode);
+      });
+    } else {
+      sendSuccessFlow(data, validatedCouponCode);
+    }
+  }
+
+  function saveSubmittedOrder(orderNumber) {
+    if (!orderNumber) return;
+    chrome.storage.local.get([SUBMITTED_ORDERS_KEY], (stored) => {
+      const entries = stored[SUBMITTED_ORDERS_KEY] || [];
+      const now = Date.now();
+      // Remove entries older than 7 days
+      const fresh = entries.filter(e => now - e.timestamp < SUBMITTED_ORDER_MAX_AGE);
+      fresh.push({ orderNumber, timestamp: now });
+      chrome.storage.local.set({ [SUBMITTED_ORDERS_KEY]: fresh });
     });
+  }
+
+  function sendSuccessFlow(data, validatedCouponCode) {
+    let successRetries = 0;
+    const MAX_SUCCESS_RETRIES = 5;
+
+    const successPayload = {
+      partner: PARTNER,
+      order_number: data.order_number,
+      email: data.email,
+      coupon_code: validatedCouponCode,
+      successData: data
+    };
+
+    function sendSuccess() {
+      chrome.runtime.sendMessage({
+        action: 'SUCCESS_DETECTED',
+        data: successPayload
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          log('❌ SUCCESS_DETECTED error:', chrome.runtime.lastError.message, '(attempt', successRetries + 1 + ')');
+          successRetries++;
+          if (successRetries < MAX_SUCCESS_RETRIES) {
+            const delay = successRetries * 2000;
+            log('🔄 Retrying SUCCESS_DETECTED in', delay / 1000, 'seconds...');
+            if (tracker) tracker.setStatus('waiting', 'Submitting... (retry ' + successRetries + ')');
+            setTimeout(sendSuccess, delay);
+          } else {
+            log('❌ SUCCESS_DETECTED failed after', MAX_SUCCESS_RETRIES, 'attempts');
+            if (tracker) tracker.setStatus('error', 'Tracking failed — check extension login');
+            log('💾 Saving to persistent retry storage...');
+            chrome.storage.local.set({
+              pfc_mffu_stuck_purchase: {
+                data: successPayload,
+                timestamp: Date.now(),
+                retries: 0,
+                order_number: data.order_number
+              }
+            });
+          }
+          return;
+        }
+
+        if (response?.success) {
+          saveSubmittedOrder(data.order_number);
+          clearValidatedCoupon();
+          purchaseCaptured = false;
+
+          if (tracker) {
+            tracker.setStatus('success', response.skipped ? 'Already tracked' : 'Reward tracked!');
+          }
+        } else {
+          log('❌ SUCCESS_DETECTED returned failure:', response?.error, '(attempt', successRetries + 1 + ')');
+          successRetries++;
+          if (successRetries < MAX_SUCCESS_RETRIES) {
+            const delay = successRetries * 2000;
+            log('🔄 Retrying SUCCESS_DETECTED in', delay / 1000, 'seconds...');
+            if (tracker) tracker.setStatus('waiting', 'Submitting... (retry ' + successRetries + ')');
+            setTimeout(sendSuccess, delay);
+          } else {
+            log('❌ SUCCESS_DETECTED failed after', MAX_SUCCESS_RETRIES, 'attempts — error:', response?.error);
+            if (tracker) tracker.setStatus('error', response?.error || 'Tracking failed');
+            log('💾 Saving to persistent retry storage...');
+            chrome.storage.local.set({
+              pfc_mffu_stuck_purchase: {
+                data: successPayload,
+                timestamp: Date.now(),
+                retries: 0,
+                order_number: data.order_number
+              }
+            });
+          }
+        }
+      });
+    }
+
+    sendSuccess();
   }
   
   // ══════════════════════════════════════════════════════════════════════
@@ -766,7 +877,7 @@
     } else if (pageType === 'success') {
       showTracker();
       if (tracker) tracker.setStatus('waiting', 'Processing purchase...');
-      setTimeout(triggerSuccess, 1000);
+      setTimeout(triggerSuccess, 300);
     }
   }
   
@@ -836,7 +947,51 @@
       discountApplied: isDiscountApplied(),
       purchaseCaptured,
       hasTriggeredSuccess
-    })
+    }),
+
+    // Export all data as JSON
+    exportAll: () => {
+      return JSON.stringify({
+        exportTimestamp: new Date().toISOString(),
+        extensionVersion: VERSION,
+        url: window.location.href,
+        pageType: getPageType(),
+        captureStatus: {
+          purchaseCaptured,
+          hasTriggeredSuccess
+        },
+        checkoutData: extractCheckoutData(),
+        successData: getPageType() === 'success' ? extractSuccessData() : null,
+        coupon: {
+          live: getCouponCode(),
+          stored: getStoredValidatedCoupon(),
+          discountApplied: isDiscountApplied()
+        },
+        networkData: {
+          products: Object.keys(networkData.products).length,
+          selectedPriceId: networkData.selectedPriceId,
+          selectedProduct: networkData.selectedProduct,
+          couponData: networkData.couponData,
+          lastNetworkUpdate: networkData.lastNetworkUpdate
+        }
+      }, null, 2);
+    },
+
+    // Download full debug JSON
+    download: () => {
+      const data = window.mffDebug.exportAll();
+      const checkoutData = extractCheckoutData();
+      const orderNum = checkoutData.order_number || 'unknown';
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pfc-mffu-${orderNum}-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   };
   
   // ══════════════════════════════════════════════════════════════════════
@@ -846,14 +1001,14 @@
   function init() {
     log('🚀 MFF Content script loaded (with MutationObserver fix)');
     log('Required coupon:', REQUIRED_COUPON);
-    
+
     // Setup watchers for dynamic plan changes
     setupOrderSummaryWatcher();
     setupClickListener();
-    
+
     // Initial check after page settles
-    setTimeout(checkPage, 1500);
-    
+    setTimeout(checkPage, 500);
+
     // Watch for SPA navigation
     let lastUrl = window.location.href;
     setInterval(() => {
@@ -866,6 +1021,30 @@
         setTimeout(checkPage, 1000);
       }
     }, 1000);
+
+    // Check for stuck purchases from previous failed submissions
+    chrome.storage.local.get(['pfc_mffu_stuck_purchase'], (stored) => {
+      if (stored.pfc_mffu_stuck_purchase) {
+        const stuck = stored.pfc_mffu_stuck_purchase;
+        if (Date.now() - stuck.timestamp < 24 * 60 * 60 * 1000) { // < 24 hours old
+          log('🔄 Found stuck purchase, retrying:', stuck.order_number);
+          chrome.runtime.sendMessage({
+            action: 'SUCCESS_DETECTED',
+            data: stuck.data
+          }, (response) => {
+            if (!chrome.runtime.lastError && response?.success) {
+              log('✅ Stuck purchase submitted successfully');
+              chrome.storage.local.remove(['pfc_mffu_stuck_purchase']);
+            } else {
+              log('⚠️ Stuck purchase retry failed:', chrome.runtime.lastError?.message || response?.error);
+            }
+          });
+        } else {
+          log('🗑️ Removing expired stuck purchase (> 24h old)');
+          chrome.storage.local.remove(['pfc_mffu_stuck_purchase']);
+        }
+      }
+    });
   }
   
   // Start

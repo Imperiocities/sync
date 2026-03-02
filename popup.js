@@ -1,11 +1,34 @@
-// JavaScript for PropFirm Compare Extension popup v2.0.0
+// JavaScript for PropFirm Compare Extension popup v2.4.0
 // V2 Features: Account connection, rewards display
 
 // Production logging control - set to false for production builds
-const DEBUG_MODE = true; // Set to false for production builds
+const DEBUG_MODE = false; // Set to false for production builds
 
 // V2: API Configuration
-const API_BASE_URL = 'https://prop-firm-compare-env-develop-junos-projects-17951c31.vercel.app';
+const API_BASE_URL = 'https://beta.propfirm.compare';
+
+// Local firm logo map — bundled with extension, no network needed
+const FIRM_LOGOS = {
+  // 'fundednext': 'logos/fundednext-futures.png',  // disabled — no active rewards program
+  // 'fundednext futures': 'logos/fundednext-futures.png',
+  'tradeify': 'logos/tradeify.png',
+  'lucid trading': 'logos/lucid-trading.png',
+  'lucidtrading': 'logos/lucid-trading.png',
+  'alpha futures': 'logos/alpha-futures.png',
+  'alphafutures': 'logos/alpha-futures.png',
+  'apex trader funding': 'logos/apex-trader-funding.png',
+  'apextraderfunding': 'logos/apex-trader-funding.png',
+  'take profit trader': 'logos/take-profit-trader.png',
+  'takeprofittrader': 'logos/take-profit-trader.png',
+  'my funded futures': 'logos/my-funded-futures.png',
+  'myfundedfutures': 'logos/my-funded-futures.png',
+};
+
+function getLocalLogo(firmName) {
+  if (!firmName) return '';
+  const key = firmName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+  return FIRM_LOGOS[key] || FIRM_LOGOS[key.replace(/\s+/g, '')] || '';
+}
 
 // Controlled logging functions
 const debugLog = (...args) => {
@@ -16,7 +39,7 @@ const debugLog = (...args) => {
 
 const debugError = (...args) => {
   if (DEBUG_MODE) {
-    debugError(...args);
+    console.error(...args);
   }
 };
 
@@ -187,24 +210,18 @@ class PopupManager {
     // Fill list of supported prop firms with live API data only
     const supportedFirmsList = document.getElementById('supported-firms-list');
     if (supportedFirmsList && this.propFirmsData?.firms) {
-      // Filter to only show firms with API data
-      const apiFirms = this.propFirmsData.firms.filter(firm => 
-        firm.isApiEnhanced && 
-        firm.apiData && 
-        firm.apiData.discount && 
-        firm.apiData.discount !== ""
+      // Filter to only show firms with API data (exclude FundedNext — no active rewards program)
+      const apiFirms = this.propFirmsData.firms.filter(firm =>
+        firm.isApiEnhanced &&
+        firm.apiData &&
+        firm.apiData.discount &&
+        firm.apiData.discount !== "" &&
+        !firm.name?.toLowerCase().includes('fundednext')
       );
 
-      // Sort firms by priority: FundedNext first, then featured, then by discount
+      // Sort firms by priority: featured first, then by discount
       const sortedFirms = [...apiFirms].sort((a, b) => {
-        // 1. Prioritize FundedNext Futures first (when not on a supported page)
-        const aIsFundedNext = a.name?.toLowerCase().includes('fundednext');
-        const bIsFundedNext = b.name?.toLowerCase().includes('fundednext');
-        
-        if (aIsFundedNext && !bIsFundedNext) return -1;
-        if (!aIsFundedNext && bIsFundedNext) return 1;
-        
-        // 2. Then prioritize featured firms
+        // 1. Prioritize featured firms
         if (a.apiData?.isFeatured && !b.apiData?.isFeatured) return -1;
         if (!a.apiData?.isFeatured && b.apiData?.isFeatured) return 1;
         
@@ -239,7 +256,7 @@ class PopupManager {
           
           // If we have an affiliate link, make it clickable
           if (affiliateLink && affiliateLink.trim() !== '') {
-            const logoUrl = firm.apiData?.logo || firm.logo || '';
+            const logoUrl = getLocalLogo(firm.name) || firm.logo || '';
             const logoHtml = logoUrl ? `<img src="${logoUrl}" alt="${firm.name}" class="firm-logo" onerror="this.style.display='none'">` : '';
             
             return `<li>
@@ -253,7 +270,7 @@ class PopupManager {
             </li>`;
           } else {
             // No affiliate link, just display as text
-            const logoUrl = firm.apiData?.logo || firm.logo || '';
+            const logoUrl = getLocalLogo(firm.name) || firm.logo || '';
             const logoHtml = logoUrl ? `<img src="${logoUrl}" alt="${firm.name}" class="firm-logo" onerror="this.style.display='none'">` : '';
             
             return `<li>
@@ -384,8 +401,9 @@ class PopupManager {
 
     // Update firm logo
     const firmLogoElement = document.getElementById('popup-firm-logo');
-    if (firmLogoElement && this.currentFirm.logo) {
-      firmLogoElement.src = this.currentFirm.logo;
+    const firmLogoSrc = getLocalLogo(this.currentFirm.name) || this.currentFirm.logo;
+    if (firmLogoElement && firmLogoSrc) {
+      firmLogoElement.src = firmLogoSrc;
       firmLogoElement.alt = this.currentFirm.name;
       firmLogoElement.style.display = 'block';
     }
@@ -869,7 +887,7 @@ class PopupManager {
     // Update view rewards link with proper URL
     const viewRewardsLink = document.getElementById('view-rewards-link');
     if (viewRewardsLink) {
-      viewRewardsLink.href = `${API_BASE_URL}/rewards`;
+      viewRewardsLink.href = `${API_BASE_URL}/profile/rewards`;
     }
   }
 
@@ -1067,7 +1085,6 @@ class PopupManager {
       'tradeify': 'Tradeify',
       'takeprofittrader': 'Take Profit Trader',
       'lucidtrading': 'Lucid Trading',
-      'fundingticks': 'Funding Ticks',
       'apextraderfunding': 'Apex Trader Funding'
     };
     return names[partner?.toLowerCase()] || partner || 'Unknown Firm';
@@ -1339,7 +1356,6 @@ class PopupManager {
       'apex': 'Apex Trader',
       'apextraderfunding': 'Apex Trader Funding',
       'tradeify': 'Tradeify',
-      'fundingticks': 'Funding Ticks',
       'takeprofittrader': 'Take Profit Trader',
       'alphafutures': 'Alpha Futures'
     };
@@ -1428,11 +1444,6 @@ class PopupManager {
       'tradeify': { 
         label: 'Transaction ID', 
         placeholder: 'e.g., TRD-12345',
-        hint: 'Found in your confirmation email'
-      },
-      'fundingticks': { 
-        label: 'Order #', 
-        placeholder: 'e.g., FT-12345',
         hint: 'Found in your confirmation email'
       },
       'takeprofittrader': { 
@@ -1582,31 +1593,10 @@ class PopupManager {
   }
 
   getFirmLogo(partner) {
-    // Try to get logo from cached prop firms data
-    if (this.propFirmsData?.firms) {
-      const firm = this.propFirmsData.firms.find(f => {
-        const firmKey = f.name?.toLowerCase().replace(/\s+/g, '');
-        const partnerKey = partner?.toLowerCase().replace(/\s+/g, '');
-        return firmKey?.includes(partnerKey) || partnerKey?.includes(firmKey);
-      });
-      if (firm?.logo || firm?.apiData?.logo) {
-        return firm.apiData?.logo || firm.logo;
-      }
-    }
-    
-    // Fallback logos for known partners
-    const logos = {
-      'myfundedfutures': 'https://myfundedfutures.com/favicon.ico',
-      'fundednext': 'https://fundednext.com/favicon.ico',
-      'tradeify': 'https://tradeify.co/favicon.ico',
-      'apextraderfunding': 'https://apextraderfunding.com/favicon.ico',
-      'takeprofittrader': 'https://takeprofittrader.com/favicon.ico',
-      'fundingticks': 'https://fundingticks.com/favicon.ico',
-      'lucidtrading': 'https://lucidtrading.com/favicon.ico',
-      'alphafutures': 'https://alpha-futures.com/favicon.ico'
-    };
-    
-    return logos[partner?.toLowerCase()] || null;
+    // Use local bundled logos
+    const local = getLocalLogo(partner);
+    if (local) return local;
+    return null;
   }
 
   formatDate(dateString) {
@@ -1671,152 +1661,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Session export button handler - exports smart extraction session data
-  const sessionBtn = document.getElementById('export-session-btn');
-  if (sessionBtn) {
-    sessionBtn.addEventListener('click', async () => {
-      try {
-        sessionBtn.disabled = true;
-        sessionBtn.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 6v6l4 2"/>
-          </svg>
-          Exporting...
-        `;
-
-        // Get recorded sessions from storage
-        const storageData = await chrome.storage.local.get([
-          'recorded_sessions',
-          'pending_purchase',
-          'recent_purchases'
-        ]);
-
-        const sessions = storageData.recorded_sessions || [];
-        const pendingPurchase = storageData.pending_purchase || null;
-        const recentPurchases = storageData.recent_purchases || [];
-
-        // Try to get live extraction from current tab
-        let liveExtraction = null;
-        try {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tab && tab.url && tab.url.startsWith('http')) {
-            liveExtraction = await new Promise((resolve) => {
-              chrome.tabs.sendMessage(tab.id, { action: 'GET_LIVE_EXTRACTION' }, (response) => {
-                if (chrome.runtime.lastError) {
-                  resolve(null);
-                } else {
-                  resolve(response);
-                }
-              });
-              // Timeout after 2 seconds
-              setTimeout(() => resolve(null), 2000);
-            });
-          }
-        } catch (e) {
-          debugLog('Could not get live extraction:', e);
-        }
-
-        // Build export data
-        const exportData = {
-          exportedAt: new Date().toISOString(),
-          extensionVersion: '2.1.3',
-          totalSessions: sessions.length,
-          sessions: sessions,
-          pendingPurchase: pendingPurchase,
-          recentPurchases: recentPurchases,
-          liveExtraction: liveExtraction,
-          summary: {
-            sessionsWithPurchaseData: sessions.filter(s => 
-              s.analysis?.purchaseDataSources?.length > 0
-            ).length,
-            totalNetworkRequests: sessions.reduce((sum, s) => 
-              sum + (s.networkRequests?.length || 0), 0
-            ),
-            totalDomSnapshots: sessions.reduce((sum, s) => 
-              sum + (s.domSnapshots?.length || 0), 0
-            )
-          }
-        };
-
-        // Check if there's any data to export
-        if (sessions.length === 0 && !pendingPurchase && !liveExtraction) {
-          sessionBtn.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            No Data
-          `;
-          setTimeout(() => {
-            sessionBtn.disabled = false;
-            sessionBtn.innerHTML = `
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7,10 12,15 17,10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Export Session Data
-            `;
-          }, 2000);
-          
-          alert('No session data to export.\n\nTo record sessions:\n1. Go to a prop firm checkout page\n2. Press Ctrl+Shift+R to start recording\n3. Complete the checkout\n4. Press Ctrl+Shift+R again to stop\n5. Click this button to export');
-          return;
-        }
-
-        // Download as JSON file
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const filename = `propfirm-session-${new Date().toISOString().split('T')[0]}.json`;
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        // Show success
-        sessionBtn.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#07E88A" stroke-width="2">
-            <polyline points="20,6 9,17 4,12"/>
-          </svg>
-          Exported!
-        `;
-        
-        setTimeout(() => {
-          sessionBtn.disabled = false;
-          sessionBtn.innerHTML = `
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7,10 12,15 17,10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Export Session Data
-          `;
-        }, 2000);
-
-        debugLog('📦 Session data exported:', {
-          sessions: sessions.length,
-          hasPending: !!pendingPurchase,
-          hasLive: !!liveExtraction
-        });
-
-      } catch (error) {
-        console.error('Session export error:', error);
-        sessionBtn.disabled = false;
-        sessionBtn.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7,10 12,15 17,10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Export Session Data
-        `;
-        alert('Error exporting session data: ' + error.message);
-      }
-    });
-  }
 }); 

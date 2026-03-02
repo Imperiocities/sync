@@ -57,6 +57,13 @@
     }).then(function(data) {
       console.log('[PFC-Tradeify] Coupon applied:', data);
       dispatch('coupon_applied', { coupon_code: COUPON_CODE, response: data });
+      // Also dispatch as a regular fetch event so processNetworkResponse handles it
+      // even if the coupon_applied CustomEvent is lost crossing MAIN↔ISOLATED world boundary
+      dispatch('fetch', {
+        url: apiUrl, method: 'POST', status: 200,
+        requestBody: JSON.stringify({ coupon_code: COUPON_CODE }),
+        responseData: data, error: null
+      });
     }).catch(function(err) {
       console.log('[PFC-Tradeify] Coupon apply error:', err);
       couponApplied = false; // Allow retry
@@ -128,6 +135,14 @@
     var url = xhr.__pfc_url;
 
     if (url && isRelevantReq(url)) {
+      // Trigger coupon apply when plandetails is fetched via XHR (not just fetch)
+      if (url.includes('plandetails') && !couponApplied) {
+        var planId = getPlanIdFromUrl();
+        if (planId) {
+          applyCouponAPI(planId);
+        }
+      }
+
       xhr.addEventListener('load', function() {
         var jsonData = null;
         try { jsonData = JSON.parse(xhr.responseText); } catch(e) {}
@@ -157,7 +172,13 @@
   };
 
   // --- Auto-apply coupon on checkout page load ---
+  var lastCheckedUrl = '';
   function initCouponOnCheckout() {
+    var currentUrl = window.location.href;
+    // Skip if we already checked this exact URL
+    if (currentUrl === lastCheckedUrl) return;
+    lastCheckedUrl = currentUrl;
+
     if (window.location.pathname.includes('/checkout')) {
       var planId = getPlanIdFromUrl();
       if (planId && !couponApplied) {
@@ -167,11 +188,30 @@
           applyCouponAPI(planId);
         }, 100);
       }
+    } else {
+      // Reset couponApplied when navigating away from checkout
+      // so it can re-apply on the next checkout visit
+      couponApplied = false;
     }
   }
 
   // Run on script load
   initCouponOnCheckout();
+
+  // SPA navigation: re-check when URL changes (pushState/replaceState)
+  var origPushState = history.pushState;
+  var origReplaceState = history.replaceState;
+  history.pushState = function() {
+    origPushState.apply(this, arguments);
+    setTimeout(initCouponOnCheckout, 100);
+  };
+  history.replaceState = function() {
+    origReplaceState.apply(this, arguments);
+    setTimeout(initCouponOnCheckout, 100);
+  };
+  window.addEventListener('popstate', function() {
+    setTimeout(initCouponOnCheckout, 100);
+  });
 
   var origDispatch = dispatch;
   dispatch = function(type, detail) {

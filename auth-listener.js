@@ -4,7 +4,7 @@
 
 (function() {
   // Wrap in IIFE to avoid variable conflicts with content.js
-  const AUTH_DEBUG = true; // Enable for testing
+  const AUTH_DEBUG = false; // Enable for testing
 
   const authLog = (...args) => {
     if (AUTH_DEBUG) {
@@ -19,7 +19,7 @@
     // Verify the message origin matches our domains
     const allowedOrigins = [
       'https://propfirm.compare',
-      'https://prop-firm-compare-env-develop-junos-projects-17951c31.vercel.app'
+      'https://beta.propfirm.compare'
     ];
     
     if (!allowedOrigins.some(origin => event.origin.startsWith(origin))) {

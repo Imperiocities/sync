@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PropFirm Compare Rewards",
-  "version": "2.3.8",
+  "version": "2.4.0",
   "description": "Auto-apply discount codes for prop trading firms & earn rewards. Affiliate disclosure: may earn commissions from partner links.",
   
   "permissions": [
@@ -14,22 +14,19 @@
   "host_permissions": [
     "http://*/*",
     "https://*/*",
-    "https://app.fundednext.com/*",
-    "https://fundednext.com/*",
     "https://lucidtrading.com/*",
     "https://*.lucidtrading.com/*",
     "https://myfundedfutures.com/*",
     "https://apextraderfunding.com/*",
     "https://tradeify.co/*",
     "https://*.tradeify.co/*",
-    "https://fundingticks.com/*",
     "https://takeprofittrader.com/*",
     "https://alpha-futures.com/*",
     "https://app.alpha-futures.com/*",
     "https://*.safecharge.com/*",
     "https://*.nuvei.com/*",
     "https://propfirm.compare/*",
-    "https://prop-firm-compare-env-develop-junos-projects-17951c31.vercel.app/*"
+    "https://beta.propfirm.compare/*"
   ],
   
   "background": {
@@ -37,22 +34,6 @@
   },
   
   "content_scripts": [
-    {
-      "matches": ["*://*.fundednext.com/*", "*://fundednext.com/*"],
-      "js": ["fn-net-intercept.js"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": ["*://*.fundednext.com/*", "*://fundednext.com/*"],
-      "js": [
-        "shared/tracker-ui.js",
-        "content-autofill.js",
-        "content-fundednext.js"
-      ],
-      "css": ["content.css"],
-      "run_at": "document_idle"
-    },
     {
       "matches": ["*://*.myfundedfutures.com/*", "*://myfundedfutures.com/*"],
       "js": ["mff-net-intercept.js"],
@@ -124,7 +105,7 @@
         "content-tradeify.js"
       ],
       "css": ["content.css"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     },
     {
       "matches": [
@@ -133,7 +114,8 @@
       ],
       "js": ["lucid-net-intercept.js"],
       "run_at": "document_start",
-      "world": "MAIN"
+      "world": "MAIN",
+      "all_frames": true
     },
     {
       "matches": [
@@ -146,12 +128,11 @@
         "content-lucidtrading.js"
       ],
       "css": ["content.css"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     },
     {
       "matches": [
-        "*://*.fundingticks.com/*",
-        "*://fundingticks.com/*",
         "*://*.apextraderfunding.com/*",
         "*://apextraderfunding.com/*"
       ],
@@ -166,7 +147,7 @@
     {
       "matches": [
         "https://propfirm.compare/extension-auth*",
-        "https://prop-firm-compare-env-develop-junos-projects-17951c31.vercel.app/extension-auth*"
+        "https://beta.propfirm.compare/extension-auth*"
       ],
       "js": ["auth-listener.js"],
       "run_at": "document_idle"
@@ -193,7 +174,7 @@
   
   "web_accessible_resources": [
     {
-      "resources": ["icons/*.png", "checkout-config.json", "config/purchase-tracking.json", "gifs/*.gif", "onboarding/*.png"],
+      "resources": ["icons/*.png", "logos/*.png", "checkout-config.json", "config/purchase-tracking.json", "gifs/*.gif", "onboarding/*.png"],
       "matches": ["<all_urls>"]
     }
   ]

@@ -91,25 +91,6 @@
       }
     ]
   },
-  "fundingticks.com": {
-    "name": "Funding Ticks",
-    "checkoutDetection": {
-      "type": "url",
-      "pattern": "/new-challenge"
-    },
-    "autoFillSequence": [
-      {
-        "action": "fill",
-        "selector": "input[placeholder='Enter coupon code']",
-        "value": "LAB"
-      },
-      {
-        "action": "click",
-        "selector": "button",
-        "content": "Apply"
-      }
-    ]
-  },
   "alpha-futures.com": {
     "name": "Alpha Futures",
     "checkoutDetection": {

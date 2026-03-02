@@ -32,6 +32,9 @@
     }
 
     _buildDOM() {
+      // Only render UI in top-level frame, never in iframes
+      if (window.self !== window.top) return;
+
       // Remove any existing tracker
       const existing = document.getElementById('pfc-checkout-tracker');
       if (existing) existing.remove();
@@ -45,12 +48,6 @@
       const closeBtn = this.container.querySelector('.propfirm-tracker-close');
       if (closeBtn) {
         closeBtn.addEventListener('click', () => this._toggleMinimize());
-      }
-
-      // Wire up manual download button
-      const dlBtn = this.container.querySelector('.propfirm-tracker-download-btn');
-      if (dlBtn) {
-        dlBtn.addEventListener('click', () => this._manualDownload());
       }
 
       // Add inline styles for tracker item label/value layout
@@ -106,42 +103,6 @@
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.4; transform: scale(0.8); }
         }
-        .propfirm-tracker-download-btn {
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          gap: 6px !important;
-          width: 100% !important;
-          margin-top: 10px !important;
-          padding: 8px 12px !important;
-          background: rgba(255, 255, 255, 0.08) !important;
-          border: 1px solid rgba(255, 255, 255, 0.15) !important;
-          border-radius: 8px !important;
-          color: rgba(255, 255, 255, 0.8) !important;
-          font-size: 11px !important;
-          font-weight: 600 !important;
-          cursor: pointer !important;
-          transition: all 0.2s ease !important;
-          font-family: inherit !important;
-        }
-        .propfirm-tracker-download-btn:hover {
-          background: rgba(0, 229, 160, 0.15) !important;
-          border-color: rgba(0, 229, 160, 0.4) !important;
-          color: #00E5A0 !important;
-        }
-        .propfirm-tracker-download-btn svg {
-          flex-shrink: 0 !important;
-        }
-        .propfirm-tracker-download-notice {
-          margin-top: 8px !important;
-          padding: 8px 10px !important;
-          background: rgba(0, 229, 160, 0.1) !important;
-          border: 1px solid rgba(0, 229, 160, 0.3) !important;
-          border-radius: 8px !important;
-          font-size: 11px !important;
-          color: #00E5A0 !important;
-          text-align: center !important;
-        }
       `;
       this.container.appendChild(style);
 
@@ -178,14 +139,6 @@
           <div class="propfirm-tracker-autofill" style="display:none;"></div>
           <ul class="propfirm-tracker-checklist">${fieldItems}</ul>
           <div class="propfirm-tracker-message" style="display:none;"></div>
-          <button class="propfirm-tracker-download-btn" title="Download tracking data">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7,10 12,15 17,10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Download Data
-          </button>
         </div>
       `;
     }
@@ -428,135 +381,6 @@
     }
 
     // --- Private helpers ---
-
-    _manualDownload() {
-      // Grab live data from the content script's debug interface
-      const liveData = {};
-
-      // TakeProfitTrader debug data
-      if (window.tptDebug) {
-        try {
-          liveData.tpt = {
-            purchaseData: window.tptDebug.data(),
-            captureStatus: window.tptDebug.status(),
-            eventTimeline: window.tptDebug.events(),
-            networkLog: window.tptDebug.network(),
-            priceHistory: window.tptDebug.prices(),
-            errorLog: window.tptDebug.errors(),
-            session: window.tptDebug.session(),
-            snapshot: window.tptDebug.snapshot()
-          };
-        } catch (e) {
-          liveData.tpt = { _debugError: e.message };
-        }
-      }
-
-      // FundedNext debug data
-      if (window.fnQueueDebug) {
-        try {
-          liveData.fundednext = {
-            extractedData: window.fnQueueDebug.extract(),
-            networkData: window.fnQueueDebug.network(),
-            networkLog: window.fnQueueDebug.networkLog()
-          };
-        } catch (e) {
-          liveData.fundednext = { _debugError: e.message };
-        }
-      }
-
-      // MyFundedFutures debug data
-      if (window.mffDebug) {
-        try {
-          liveData.myfundedfutures = {
-            extractedData: window.mffDebug.extract(),
-            couponStatus: window.mffDebug.coupon(),
-            pageStatus: window.mffDebug.status()
-          };
-        } catch (e) {
-          liveData.myfundedfutures = { _debugError: e.message };
-        }
-      }
-
-      // Tradeify debug data
-      if (window.tradeifyDebug) {
-        try {
-          liveData.tradeify = {
-            extractedData: window.tradeifyDebug.extract(),
-            networkData: window.tradeifyDebug.network(),
-            pageStatus: window.tradeifyDebug.status()
-          };
-        } catch (e) {
-          liveData.tradeify = { _debugError: e.message };
-        }
-      }
-
-      // Network intercept data (if available)
-      if (window.__pfcFnNet) {
-        try {
-          liveData.fnNetworkLog = window.__pfcFnNet.log.slice(-50);
-        } catch (e) {}
-      }
-      if (window.__pfcMffNet) {
-        try {
-          liveData.mffNetworkLog = window.__pfcMffNet.log.slice(-50);
-        } catch (e) {}
-      }
-      if (window.__pfcTradeifyNet) {
-        try {
-          liveData.tradeifyNetworkLog = window.__pfcTradeifyNet.log.slice(-50);
-        } catch (e) {}
-      }
-      if (window.__pfcAfNet) {
-        try {
-          liveData.alphaFuturesNetworkLog = window.__pfcAfNet.log.slice(-50);
-        } catch (e) {}
-      }
-      if (window.__pfcLucidNet) {
-        try {
-          liveData.lucidTradingNetworkLog = window.__pfcLucidNet.log.slice(-50);
-        } catch (e) {}
-      }
-
-      const exportData = {
-        exportedAt: new Date().toISOString(),
-        exportType: 'manual_download',
-        extensionVersion: (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
-          ? chrome.runtime.getManifest().version
-          : 'unknown',
-        pageUrl: window.location.href,
-        trackerFields: Object.assign({}, this.fieldValues),
-        trackerStatus: this.currentStatus,
-        trackerStatusMessage: this.currentStatusMessage,
-        liveData: liveData
-      };
-
-      const json = JSON.stringify(exportData, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-
-      const dateStr = new Date().toISOString().replace(/[:.]/g, '-').split('T');
-      const host = window.location.hostname.replace(/[^a-zA-Z0-9]/g, '-');
-      const filename = `pfc-${host}-${dateStr[0]}-${dateStr[1].substring(0, 8)}.json`;
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      // Visual feedback
-      const btn = this.container?.querySelector('.propfirm-tracker-download-btn');
-      if (btn) {
-        btn.textContent = 'Downloaded!';
-        btn.style.color = '#00E5A0';
-        setTimeout(() => {
-          btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download Data';
-          btn.style.color = '';
-        }, 2000);
-      }
-    }
 
     _toggleMinimize() {
       if (this.isMinimized) {

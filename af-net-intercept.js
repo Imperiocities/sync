@@ -150,6 +150,36 @@
   // Run on script load
   initCouponOnCheckout();
 
+  // Monitor SPA navigation — re-apply coupon when navigating to checkout
+  var lastCheckedUrl = window.location.href;
+  setInterval(function() {
+    var currentUrl = window.location.href;
+    if (currentUrl !== lastCheckedUrl) {
+      lastCheckedUrl = currentUrl;
+      var path = window.location.pathname.toLowerCase();
+      if (path.includes('checkout')) {
+        var planId = getPlanIdFromUrl();
+        if (planId) {
+          console.log('[PFC-AlphaFutures] SPA navigation to checkout, applying coupon for plan:', planId);
+          couponApplied = false;
+          applyCouponAPI(planId);
+        }
+      }
+    }
+  }, 300);
+
+  // Listen for re-apply requests from content script (plan/type changes)
+  document.addEventListener('__pfc_af_reapply_coupon', function(e) {
+    try {
+      var detail = typeof e.detail === 'string' ? JSON.parse(e.detail) : e.detail;
+      if (detail && detail.planId) {
+        console.log('[PFC-AlphaFutures] Re-applying coupon for plan change:', detail.planId);
+        couponApplied = false;
+        applyCouponAPI(detail.planId);
+      }
+    } catch(err) {}
+  });
+
   // --- Debug bridge ---
   var capturedRequests = [];
   window.__pfcAfNet = {
