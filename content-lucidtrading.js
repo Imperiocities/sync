@@ -23,6 +23,7 @@
 
   const PARTNER = 'lucidtrading';
   const ADAPTER_VERSION = '1.0';
+  const isInIframe = (window.self !== window.top);
 
   // ═══════════════════════════════════════════════════════════════════
   // PURCHASE DATA STATE
@@ -123,6 +124,9 @@
     if (purchaseData.order_id) {
       t.updateField('order_id', purchaseData.order_id);
     }
+
+    // Bridge data to parent frame when running in iframe
+    postDataToParent();
   }
 
   function setStatus(status, text) {
@@ -133,6 +137,41 @@
     if (t) {
       t.setStatus(status, text || status);
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // POSTMESSAGE BRIDGE (iframe → parent)
+  // ═══════════════════════════════════════════════════════════════════
+
+  function postDataToParent() {
+    if (!isInIframe) return;
+    try {
+      window.parent.postMessage({
+        type: 'pfc-lucid-checkout-data',
+        data: {
+          email: purchaseData.email,
+          customer_name: purchaseData.customer_name,
+          product_name: purchaseData.product_name,
+          original_price: purchaseData.original_price,
+          final_price: purchaseData.final_price,
+          discount_amount: purchaseData.discount_amount,
+          discount_percent: purchaseData.discount_percent,
+          coupon_code: purchaseData.coupon_code,
+          coupon_confirmed: couponConfirmed,
+          order_id: purchaseData.order_id
+        }
+      }, '*');
+    } catch (err) {}
+  }
+
+  function postStatusToParent(status, text) {
+    if (!isInIframe) return;
+    try {
+      window.parent.postMessage({
+        type: 'pfc-lucid-status',
+        data: { status: status, text: text }
+      }, '*');
+    } catch (err) {}
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -174,6 +213,16 @@
           setTimeout(() => t.setAutoFillStatus('hidden', ''), 3000);
         }
         updateTrackerUI();
+
+        // Relay coupon event to parent frame
+        if (isInIframe) {
+          try {
+            window.parent.postMessage({
+              type: 'pfc-lucid-coupon-applied',
+              data: { coupon_code: purchaseData.coupon_code }
+            }, '*');
+          } catch (err) {}
+        }
       }
     } catch (err) {
       console.error('[PFC-Lucid] Network event error:', err);
@@ -358,39 +407,75 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // DASHBOARD DATA CAPTURE (dash.lucidtrading.com)
+  // DASHBOARD BRIDGE (parent frame receives data from iframe)
   // ═══════════════════════════════════════════════════════════════════
 
-  function captureDashboardData() {
-    // Try common selectors for SPA checkout pages
-    // Email
-    if (!purchaseData.email) {
-      const emailEl = document.querySelector('input[type="email"], input[name*="email" i], input[placeholder*="email" i]');
-      if (emailEl && emailEl.value) {
-        purchaseData.email = emailEl.value;
-      }
-    }
+  let dashboardBridgeActive = false;
 
-    // Product name — look for selected account/plan text
-    if (!purchaseData.product_name) {
-      const selectedPlan = document.querySelector('[class*="selected"] [class*="title"], [class*="active"] [class*="plan"], [class*="selected"] h3, [class*="selected"] h4');
-      if (selectedPlan) {
-        purchaseData.product_name = selectedPlan.textContent.trim();
-      }
-    }
+  function setupDashboardBridge() {
+    if (isInIframe || dashboardBridgeActive) return;
+    dashboardBridgeActive = true;
 
-    // Price — look for total/price elements
-    if (!purchaseData.original_price) {
-      const priceEl = document.querySelector('[class*="total"] [class*="price"], [class*="price"], [class*="amount"]');
-      if (priceEl) {
-        const priceMatch = priceEl.textContent.match(/\$?([\d,]+\.?\d*)/);
-        if (priceMatch) {
-          purchaseData.original_price = parseFloat(priceMatch[1].replace(',', ''));
+    window.addEventListener('message', function(event) {
+      if (!event.data || !event.data.type) return;
+      if (typeof event.data.type !== 'string' || !event.data.type.startsWith('pfc-lucid-')) return;
+
+      const msgType = event.data.type;
+      const d = event.data.data;
+      if (!d) return;
+
+      console.log('[PFC-Lucid] Bridge received:', msgType);
+
+      if (msgType === 'pfc-lucid-checkout-data') {
+        // Apply iframe checkout data to parent purchaseData
+        if (d.email) purchaseData.email = d.email;
+        if (d.customer_name) purchaseData.customer_name = d.customer_name;
+        if (d.product_name) purchaseData.product_name = d.product_name;
+        if (d.original_price) purchaseData.original_price = d.original_price;
+        if (d.final_price) purchaseData.final_price = d.final_price;
+        if (d.discount_amount) purchaseData.discount_amount = d.discount_amount;
+        if (d.discount_percent) purchaseData.discount_percent = d.discount_percent;
+        if (d.coupon_code) purchaseData.coupon_code = d.coupon_code;
+        if (d.coupon_confirmed) couponConfirmed = true;
+        if (d.order_id) purchaseData.order_id = d.order_id;
+
+        updateTrackerUI();
+      }
+
+      if (msgType === 'pfc-lucid-coupon-applied') {
+        couponConfirmed = true;
+        if (d.coupon_code) purchaseData.coupon_code = d.coupon_code;
+
+        const t = tracker || window.__pfcTracker;
+        if (t) {
+          t.setAutoFillStatus('success', 'Code "LAB" applied! ✓');
+          t.updateField('coupon', d.coupon_code || 'LAB');
+          setTimeout(() => t.setAutoFillStatus('hidden', ''), 3000);
+        }
+        updateTrackerUI();
+      }
+
+      if (msgType === 'pfc-lucid-status') {
+        const t = tracker || window.__pfcTracker;
+        if (t) {
+          setStatus(d.status, d.text);
+          if (d.status === 'success') {
+            t.showMessage('success', d.text || 'Purchase tracked!');
+          } else if (d.status === 'warning') {
+            t.showMessage('warning', d.text || 'Purchase detected');
+          }
         }
       }
-    }
 
-    return !!(purchaseData.email || purchaseData.product_name || purchaseData.original_price);
+      if (msgType === 'pfc-lucid-net-data') {
+        // Raw network data relay from net interceptor in iframe
+        if (d.type === 'fetch' || d.type === 'xhr') {
+          processNetworkResponse(d.data.url, d.data.responseData, d.data.responseText, d.data.parsedRequestBody);
+        }
+      }
+    });
+
+    console.log('[PFC-Lucid] Dashboard bridge listener active');
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -522,18 +607,24 @@
         console.log('[PFC-Lucid] Success response:', successResponse);
 
         const t = tracker || window.__pfcTracker;
-        if (t) {
-          if (successResponse?.skipped) {
+        if (successResponse?.skipped) {
+          if (t) {
             setStatus('success', 'Already tracked');
             t.showMessage('success', 'This purchase was already tracked!');
-          } else if (successResponse?.success) {
+          }
+          postStatusToParent('success', 'Already tracked');
+        } else if (successResponse?.success) {
+          if (t) {
             setStatus('success', 'Reward tracked!');
             t.showMessage('success', 'Your purchase has been submitted for rewards!');
-          } else {
+          }
+          postStatusToParent('success', 'Reward tracked!');
+        } else {
+          if (t) {
             setStatus('warning', 'Purchase detected');
             t.showMessage('warning', successResponse?.error || 'Data captured but API did not confirm');
           }
-
+          postStatusToParent('warning', successResponse?.error || 'Data captured but API did not confirm');
         }
       });
     });
@@ -567,13 +658,12 @@
     }
 
     // Dashboard checkout (dash.lucidtrading.com/#/add-account)
-    if (isDashboardCheckout()) {
-      console.log('[PFC-Lucid] Dashboard checkout detected');
+    // Checkout form is in a cross-origin iframe — data arrives via postMessage bridge
+    if (isDashboardCheckout() && !isInIframe) {
+      console.log('[PFC-Lucid] Dashboard checkout detected (parent frame)');
       showTracker();
-      setStatus('waiting', 'Watching for purchase...');
-
-      captureDashboardData();
-      updateTrackerUI();
+      setStatus('waiting', 'Waiting for checkout data...');
+      setupDashboardBridge();
 
       return true;
     }
@@ -593,16 +683,14 @@
 
   function startWatchers() {
     // Poll for DOM changes and order success
+    // (Dashboard parent frame gets data via postMessage bridge, not polling)
     setInterval(() => {
-      if (isDashboardCheckout()) {
-        // Dashboard checkout — poll dashboard-specific selectors
-        captureDashboardData();
-      } else {
-        // WooCommerce checkout — poll WooCommerce selectors
+      if (!isDashboardCheckout() || isInIframe) {
+        // WooCommerce checkout (direct or in iframe) — poll WooCommerce selectors
         captureBillingFromDOM();
         capturePricingFromDOM();
+        updateTrackerUI();
       }
-      updateTrackerUI();
 
       // Check for order success
       checkForOrderSuccess();

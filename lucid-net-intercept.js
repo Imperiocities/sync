@@ -292,6 +292,8 @@
   };
 
   var origDispatch = dispatch;
+  var isIframe = (window.self !== window.top);
+
   dispatch = function(type, detail) {
     if (type === 'fetch' || type === 'xhr') {
       capturedRequests.push({
@@ -305,9 +307,20 @@
         capturedRequests.splice(0, capturedRequests.length - 100);
       }
     }
+
+    // Dispatch CustomEvent for content script in same frame
     origDispatch(type, detail);
+
+    // Also relay to parent frame via postMessage when in iframe
+    if (isIframe) {
+      try {
+        window.parent.postMessage({
+          type: 'pfc-lucid-net-data',
+          data: { type: type, data: detail }
+        }, '*');
+      } catch(e) {}
+    }
   };
 
-  var isIframe = (window.self !== window.top);
   console.log('[PFC-Lucid] Network interceptor installed' + (isIframe ? ' (iframe context)' : ''));
 })();
