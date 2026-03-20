@@ -675,6 +675,34 @@ class PropFirmExtension {
 const extensionInstance = new PropFirmExtension();
 
 // ============================================
+// COOKIE JWT READER (for httpOnly cookies)
+// ============================================
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'GET_COOKIE_JWT') {
+    chrome.cookies.get({ url: message.url, name: message.cookieName }, (cookie) => {
+      if (cookie && cookie.value) {
+        try {
+          const parts = cookie.value.split('.');
+          if (parts.length >= 2) {
+            let payload = parts[1];
+            payload += '='.repeat((4 - payload.length % 4) % 4);
+            const decoded = JSON.parse(atob(payload));
+            sendResponse({ success: true, payload: decoded });
+          } else {
+            sendResponse({ success: false, error: 'Invalid JWT format' });
+          }
+        } catch (e) {
+          sendResponse({ success: false, error: e.message });
+        }
+      } else {
+        sendResponse({ success: false, error: 'Cookie not found for ' + message.url });
+      }
+    });
+    return true; // Keep channel open for async
+  }
+});
+
+// ============================================
 // V2: AUTHENTICATION HANDLING
 // ============================================
 

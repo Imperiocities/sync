@@ -1,19 +1,18 @@
 {
   "manifest_version": 3,
   "name": "PropFirm Compare Rewards",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Auto-apply discount codes for prop trading firms & earn rewards. Affiliate disclosure: may earn commissions from partner links.",
   
   "permissions": [
     "activeTab",
     "tabs",
     "storage",
-    "notifications"
+    "notifications",
+    "cookies"
   ],
   
   "host_permissions": [
-    "http://*/*",
-    "https://*/*",
     "https://lucidtrading.com/*",
     "https://*.lucidtrading.com/*",
     "https://myfundedfutures.com/*",
@@ -21,6 +20,7 @@
     "https://tradeify.co/*",
     "https://*.tradeify.co/*",
     "https://takeprofittrader.com/*",
+    "https://*.takeprofittrader.com/*",
     "https://alpha-futures.com/*",
     "https://app.alpha-futures.com/*",
     "https://*.safecharge.com/*",

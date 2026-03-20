@@ -815,6 +815,7 @@
 
   function captureUser() {
     try {
+      // Try document.cookie first (works if cookie is not httpOnly)
       const match = document.cookie.match(/access_token=([^;]+)/);
       if (match) {
         const parts = match[1].split('.');
@@ -828,18 +829,60 @@
           purchaseData.user_id = decoded.sub || null;
 
           originalLog.call(console, '[TPT] Stage 1: TPT email -', purchaseData.email);
-          addEvent('user_captured', 'Email and user data from JWT', {
+          addEvent('user_captured', 'Email and user data from JWT (document.cookie)', {
             email: purchaseData.email,
             has_name: !!purchaseData.customer_name,
             has_user_id: !!purchaseData.user_id
           });
           updateTrackerUI();
+          return true;
         }
       }
 
-      if (!purchaseData.email) {
-        originalLog.call(console, '[TPT] Stage 1: No email found on TPT');
-      }
+      // Fallback: read httpOnly cookie via background script chrome.cookies API
+      // Try current page URL first, then common TPT domains
+      const tryUrls = [
+        window.location.origin + '/',
+        'https://takeprofittrader.com/',
+        'https://www.takeprofittrader.com/',
+        'https://app.takeprofittrader.com/'
+      ];
+      // Deduplicate
+      const uniqueUrls = [...new Set(tryUrls)];
+      originalLog.call(console, '[TPT] Stage 1: document.cookie failed, trying chrome.cookies API...', uniqueUrls);
+
+      let found = false;
+      let pending = uniqueUrls.length;
+
+      uniqueUrls.forEach((tryUrl) => {
+        chrome.runtime.sendMessage({
+          action: 'GET_COOKIE_JWT',
+          url: tryUrl,
+          cookieName: 'access_token'
+        }, (response) => {
+          pending--;
+          if (chrome.runtime.lastError) {
+            originalLog.call(console, '[TPT] Stage 1: chrome.cookies error for', tryUrl, ':', chrome.runtime.lastError.message);
+          }
+          if (!found && response?.success && response.payload) {
+            found = true;
+            const decoded = response.payload;
+            purchaseData.email = decoded.email || null;
+            purchaseData.customer_name = [decoded.given_name, decoded.family_name].filter(Boolean).join(' ') || null;
+            purchaseData.user_id = decoded.sub || null;
+
+            originalLog.call(console, '[TPT] Stage 1: TPT email (via chrome.cookies from', tryUrl, ') -', purchaseData.email);
+            addEvent('user_captured', 'Email and user data from JWT (chrome.cookies)', {
+              email: purchaseData.email,
+              has_name: !!purchaseData.customer_name,
+              has_user_id: !!purchaseData.user_id
+            });
+            updateTrackerUI();
+          } else if (pending === 0 && !found) {
+            originalLog.call(console, '[TPT] Stage 1: No access_token cookie found on any TPT domain');
+          }
+        });
+      });
 
       return true;
     } catch (e) {
@@ -1682,9 +1725,8 @@
       resetFlowActive = true;
       couponConfirmed = false;
 
-      if (!purchaseData.email) {
-        captureUser();
-      }
+      // Always re-capture (cookie may be httpOnly, needs chrome.cookies fallback)
+      captureUser();
 
       addEvent('reset_flow_started', 'Reset flow initialized', {
         account_id: purchaseData.account_id,
@@ -1695,7 +1737,8 @@
       showTracker();
       updateTrackerUI();
       setStatus('waiting', 'Waiting for reset payment...');
-      checkEmailBeforePurchase();
+      // Delay email check to allow async chrome.cookies fallback to complete
+      setTimeout(checkEmailBeforePurchase, 500);
       persistPurchaseState();
     }, true);
   }
@@ -1925,7 +1968,10 @@
 
     showTracker();
     storeCurrentFirstAccountId();
-    checkEmailBeforePurchase();
+    // Re-capture user data (cookie may be available now even if it wasn't at page start)
+    captureUser();
+    // Delay email check to allow async chrome.cookies fallback to complete
+    setTimeout(checkEmailBeforePurchase, 500);
     startDiscountPolling();
     startSuccessPolling();
     setTimeout(() => { performAutofill(); }, 1500);
