@@ -53,7 +53,7 @@ body:has(#onboarding-overlay[style*="flex"]) {
 .popup-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 450px;
 }
 
 /* Header */

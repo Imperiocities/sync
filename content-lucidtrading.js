@@ -21,6 +21,12 @@
   if (window.__pfcLucidAdapterInstalled) return;
   window.__pfcLucidAdapterInstalled = true;
 
+  // Pages where the extension should not run
+  const EXCLUDED_HASHES = ['#/account-summary'];
+  function isExcludedPage() {
+    return EXCLUDED_HASHES.some(h => window.location.hash.startsWith(h));
+  }
+
   const PARTNER = 'lucidtrading';
   const ADAPTER_VERSION = '1.0';
   const isInIframe = (window.self !== window.top);
@@ -768,10 +774,27 @@
     startWatchers();
   }
 
+  let initialized = false;
+
+  function tryStart() {
+    if (isExcludedPage()) {
+      if (tracker) tracker.hide();
+      return;
+    }
+    if (!initialized) {
+      initialized = true;
+      init();
+    } else if (tracker) {
+      tracker.show();
+    }
+  }
+
+  window.addEventListener('hashchange', tryStart);
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', tryStart);
   } else {
-    init();
+    tryStart();
   }
 
 })();
