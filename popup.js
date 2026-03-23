@@ -1,11 +1,11 @@
-// JavaScript for PropFirm Compare Extension popup v2.4.0
+// JavaScript for PropFirm Compare Extension popup v2.4.3
 // V2 Features: Account connection, rewards display
 
 // Production logging control - set to false for production builds
 const DEBUG_MODE = false; // Set to false for production builds
 
 // V2: API Configuration
-const API_BASE_URL = 'https://beta.propfirm.compare';
+const API_BASE_URL = 'https://propfirm.compare';
 
 // Local firm logo map — bundled with extension, no network needed
 const FIRM_LOGOS = {

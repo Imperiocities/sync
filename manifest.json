@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PropFirm Compare Rewards",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "description": "Auto-apply discount codes for prop trading firms & earn rewards. Affiliate disclosure: may earn commissions from partner links.",
   
   "permissions": [
