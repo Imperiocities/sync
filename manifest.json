@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PropFirm Compare Rewards",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "description": "Auto-apply discount codes for prop trading firms & earn rewards. Affiliate disclosure: may earn commissions from partner links.",
   
   "permissions": [
@@ -25,6 +25,9 @@
     "https://app.alpha-futures.com/*",
     "https://*.safecharge.com/*",
     "https://*.nuvei.com/*",
+    "https://fundednext.com/*",
+    "https://*.fundednext.com/*",
+    "https://app.fundednext.com/*",
     "https://propfirm.compare/*",
     "https://beta.propfirm.compare/*"
   ],
@@ -90,6 +93,22 @@
       ],
       "css": ["content.css"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.fundednext.com/*", "*://fundednext.com/*"],
+      "js": ["fn-net-intercept.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.fundednext.com/*", "*://fundednext.com/*"],
+      "js": [
+        "shared/tracker-ui.js",
+        "content-autofill.js",
+        "content-fundednext.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
     },
     {
       "matches": ["*://*.tradeify.co/*", "*://tradeify.co/*"],
