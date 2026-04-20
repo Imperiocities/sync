@@ -14,12 +14,12 @@
     "skipValidation": true,
     "checkoutDetection": {
       "type": "url",
-      "pattern": "/checkout"
+      "pattern": "/checkout|/add-account"
     },
     "autoFillSequence": [
       {
         "action": "click",
-        "selector": ".promo_btn, button[class*='promo']",
+        "selector": ".promo_btn, .discountBtn, button[class*='promo'], button[class*='discount']",
         "optional": true
       },
       {
@@ -28,13 +28,13 @@
       },
       {
         "action": "waitForVisible",
-        "selector": "input[placeholder*='promo' i]",
+        "selector": "input[placeholder*='promo' i], input[placeholder*='discount' i], input[placeholder*='code' i]",
         "maxWait": 3000,
         "optional": true
       },
       {
         "action": "fill",
-        "selector": "input[placeholder*='promo' i]",
+        "selector": "input[placeholder*='promo' i], input[placeholder*='discount' i], input[placeholder*='code' i]",
         "value": "LAB"
       },
       {
@@ -55,12 +55,12 @@
     "skipValidation": true,
     "checkoutDetection": {
       "type": "url",
-      "pattern": "/checkout"
+      "pattern": "/checkout|/add-account"
     },
     "autoFillSequence": [
       {
         "action": "click",
-        "selector": ".promo_btn, button[class*='promo']",
+        "selector": ".promo_btn, .discountBtn, button[class*='promo'], button[class*='discount']",
         "optional": true
       },
       {
@@ -69,13 +69,13 @@
       },
       {
         "action": "waitForVisible",
-        "selector": "input[placeholder*='promo' i]",
+        "selector": "input[placeholder*='promo' i], input[placeholder*='discount' i], input[placeholder*='code' i]",
         "maxWait": 3000,
         "optional": true
       },
       {
         "action": "fill",
-        "selector": "input[placeholder*='promo' i]",
+        "selector": "input[placeholder*='promo' i], input[placeholder*='discount' i], input[placeholder*='code' i]",
         "value": "LAB"
       },
       {
@@ -135,7 +135,7 @@
       {
         "action": "click",
         "selector": "button",
-        "content": "Apply"
+        "content": "Apply a discount"
       }
     ]
   },

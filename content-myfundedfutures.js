@@ -374,8 +374,8 @@
     };
     
     // Extract product name: Various formats MFF uses:
-    // "Flex • $50,000" or "Rapid Plan • $50,000" or "Pro100K" or "Flex 25k"
-    const productMatch = text.match(/((?:Rapid|Flex|Pro|Core|Express|Standard|Elite)(?:\s*Plan)?(?:\s*\d+[Kk])?)\s*[•·]\s*\$?([\d,]+)/i);
+    // "Flex • $50,000" or "Rapid Plan • $50,000" or "Pro100K" or "Flex 25k" or "Builder 2.0K • $50,000"
+    const productMatch = text.match(/((?:Rapid|Flex|Pro|Builder|Core|Express|Standard|Elite)(?:\s*Plan)?(?:\s*[\d.]+[Kk])?)\s*[•·]\s*\$?([\d,]+)/i);
     if (productMatch) {
       const planType = productMatch[1];
       let size = parseInt(productMatch[2].replace(/,/g, ''));

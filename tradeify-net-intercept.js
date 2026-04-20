@@ -4,15 +4,15 @@
  * Intercepts fetch/XHR to capture plan details, pricing, and user data.
  * Dispatches events to content script via CustomEvent.
  *
- * AUTO-COUPON: Automatically applies LAB coupon via couponsCheck API
+ * NOTE: As of April 2026, Tradeify renamed their API endpoints:
+ *   plandetails → plan-details, orderdetails → order-details
+ *   couponsCheck endpoint was removed entirely.
+ *   Coupon application now handled via DOM autofill in content script.
  */
 (function() {
   'use strict';
   if (window.__pfcTradeifyNetInterceptInstalled) return;
   window.__pfcTradeifyNetInterceptInstalled = true;
-
-  var COUPON_CODE = 'LAB';
-  var couponApplied = false;
 
   function isRelevantReq(url) {
     if (!url) return false;
@@ -36,46 +36,6 @@
     } catch(e) {}
   }
 
-  // --- Auto-apply coupon via API ---
-  function applyCouponAPI(planId) {
-    if (couponApplied) return;
-    couponApplied = true;
-
-    var apiUrl = 'https://app-f.tradeify.co/api/dashboard/couponsCheck/' + planId;
-    console.log('[PFC-Tradeify] Auto-applying coupon LAB for plan:', planId);
-
-    origFetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ coupon_code: COUPON_CODE }),
-      credentials: 'include'
-    }).then(function(response) {
-      return response.json();
-    }).then(function(data) {
-      console.log('[PFC-Tradeify] Coupon applied:', data);
-      dispatch('coupon_applied', { coupon_code: COUPON_CODE, response: data });
-      // Also dispatch as a regular fetch event so processNetworkResponse handles it
-      // even if the coupon_applied CustomEvent is lost crossing MAIN↔ISOLATED world boundary
-      dispatch('fetch', {
-        url: apiUrl, method: 'POST', status: 200,
-        requestBody: JSON.stringify({ coupon_code: COUPON_CODE }),
-        responseData: data, error: null
-      });
-    }).catch(function(err) {
-      console.log('[PFC-Tradeify] Coupon apply error:', err);
-      couponApplied = false; // Allow retry
-    });
-  }
-
-  // --- Extract plan ID from URL ---
-  function getPlanIdFromUrl() {
-    var match = window.location.search.match(/plan_id=([^&]+)/);
-    return match ? match[1] : null;
-  }
-
   // --- Fetch override ---
   var origFetch = window.fetch;
   window.fetch = function() {
@@ -87,15 +47,6 @@
     var reqBody = options.body || null;
 
     if (!isRelevantReq(url)) return origFetch.apply(this, args);
-
-    // When plandetails is fetched, also apply coupon
-    if (url.includes('plandetails') && !couponApplied) {
-      var planId = getPlanIdFromUrl();
-      if (planId) {
-        // Apply coupon immediately (don't wait)
-        applyCouponAPI(planId);
-      }
-    }
 
     return origFetch.apply(this, args).then(function(response) {
       var clone = response.clone();
@@ -135,14 +86,6 @@
     var url = xhr.__pfc_url;
 
     if (url && isRelevantReq(url)) {
-      // Trigger coupon apply when plandetails is fetched via XHR (not just fetch)
-      if (url.includes('plandetails') && !couponApplied) {
-        var planId = getPlanIdFromUrl();
-        if (planId) {
-          applyCouponAPI(planId);
-        }
-      }
-
       xhr.addEventListener('load', function() {
         var jsonData = null;
         try { jsonData = JSON.parse(xhr.responseText); } catch(e) {}
@@ -171,46 +114,24 @@
     }
   };
 
-  // --- Auto-apply coupon on checkout page load ---
-  var lastCheckedUrl = '';
-  function initCouponOnCheckout() {
-    var currentUrl = window.location.href;
-    // Skip if we already checked this exact URL
-    if (currentUrl === lastCheckedUrl) return;
-    lastCheckedUrl = currentUrl;
-
-    if (window.location.pathname.includes('/checkout')) {
-      var planId = getPlanIdFromUrl();
-      if (planId && !couponApplied) {
-        console.log('[PFC-Tradeify] Checkout detected, applying coupon...');
-        // Small delay to ensure cookies are set
-        setTimeout(function() {
-          applyCouponAPI(planId);
-        }, 100);
-      }
-    } else {
-      // Reset couponApplied when navigating away from checkout
-      // so it can re-apply on the next checkout visit
-      couponApplied = false;
-    }
+  // --- SPA navigation monitoring ---
+  // Dispatch a navigation event so the content script can re-check the page
+  function onNavigation() {
+    dispatch('navigation', { url: window.location.href });
   }
 
-  // Run on script load
-  initCouponOnCheckout();
-
-  // SPA navigation: re-check when URL changes (pushState/replaceState)
   var origPushState = history.pushState;
   var origReplaceState = history.replaceState;
   history.pushState = function() {
     origPushState.apply(this, arguments);
-    setTimeout(initCouponOnCheckout, 100);
+    setTimeout(onNavigation, 100);
   };
   history.replaceState = function() {
     origReplaceState.apply(this, arguments);
-    setTimeout(initCouponOnCheckout, 100);
+    setTimeout(onNavigation, 100);
   };
   window.addEventListener('popstate', function() {
-    setTimeout(initCouponOnCheckout, 100);
+    setTimeout(onNavigation, 100);
   });
 
   var origDispatch = dispatch;

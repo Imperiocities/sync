@@ -1,11 +1,12 @@
 /**
- * TRADEIFY CONTENT SCRIPT v1.2
+ * TRADEIFY CONTENT SCRIPT v1.3
  * Handles checkout capture, success detection, and LAB coupon autofill for Tradeify
  *
  * Data Sources:
- * - Network: /api/dashboard/plandetails - plan info, price, coupon
+ * - Network: /api/dashboard/plan-details (was plandetails) - plan info, price, coupon
  * - Network: /api/dashboard/plan-list - all plans
- * - Network: /api/dashboard/profile - user id, email, name, phone
+ * - Network: /api/auth/profile (was /api/dashboard/profile) - user id, email, name, phone
+ * - Network: /api/dashboard/order-details (was orderdetails) - order confirmation
  * - Network: Intercom ping - email, user_id, name (fallback)
  * - Network: Klaviyo events - email, user ID (fallback)
  * - LocalStorage: Intercom user data
@@ -13,9 +14,15 @@
  * - DOM: Success page detection
  *
  * Features:
- * - LAB coupon auto-fill on checkout page
+ * - LAB coupon auto-fill on checkout page (deferred until Step 2 of 2-step checkout)
  * - User profile data capture (email, user_id, name, phone)
  * - Price tracking with discount calculation
+ *
+ * April 2026: Updated for Tradeify 3.0 checkout redesign
+ *   - API endpoints renamed (hyphenated)
+ *   - couponsCheck API removed — coupon applied via DOM only
+ *   - 2-step checkout: Sign up → Payment (coupon UI disabled until auth)
+ *   - DOM selectors: .promo_btn → .discountBtn, .promo_chip removed
  */
 
 (function() {
@@ -28,7 +35,7 @@
   const PARTNER = 'tradeify';
   const PARTNER_NAME = 'Tradeify';
   const DEBUG = false;
-  const VERSION = 'v1.2';
+  const VERSION = 'v1.3';
   const VALID_COUPONS = ['LAB'];
 
   function log(...args) {
@@ -189,9 +196,9 @@
 
     // ─────────────────────────────────────────────────────────────────
     // Plan details endpoint
-    // /api/dashboard/plandetails?id=xxx
+    // /api/dashboard/plan-details?plan_id=xxx (was plandetails?id=xxx)
     // ─────────────────────────────────────────────────────────────────
-    if (urlLower.includes('plandetails')) {
+    if (urlLower.includes('plandetails') || urlLower.includes('plan-details')) {
       log('🔍 Processing plandetails response');
       // Try multiple response structures (API may vary)
       let plan = null;
@@ -251,12 +258,15 @@
 
     // ─────────────────────────────────────────────────────────────────
     // User profile endpoint - best source of user data
-    // /api/dashboard/profile
+    // /api/auth/profile (was /api/dashboard/profile)
     // ─────────────────────────────────────────────────────────────────
     if (urlLower.includes('/profile') && !urlLower.includes('sumsub')) {
       log('🔍 Processing profile response');
       if (data.success && data.data) {
-        const profile = data.data;
+        // Handle triple-nested response: { success, data: { success, status, data: { id, email, ... } } }
+        const profile = (data.data.data && typeof data.data.data === 'object' && data.data.data.id)
+          ? data.data.data
+          : data.data;
         if (profile.id) {
           networkData.userId = profile.id;
           log('✅ User ID from profile:', networkData.userId);
@@ -282,9 +292,9 @@
 
     // ─────────────────────────────────────────────────────────────────
     // Order details endpoint (called on success/thank-you page)
-    // /api/dashboard/orderdetails?id=xxx
+    // /api/dashboard/order-details?order_id=xxx (was orderdetails?id=xxx)
     // ─────────────────────────────────────────────────────────────────
-    if (urlLower.includes('orderdetails')) {
+    if (urlLower.includes('orderdetails') || urlLower.includes('order-details')) {
       log('🔍 Processing orderdetails response');
       let order = null;
       if (data.success && data.data?.data) {
@@ -401,10 +411,10 @@
 
     // ─────────────────────────────────────────────────────────────────
     // Coupon check endpoint — confirms LAB was applied server-side
-    // /api/dashboard/couponsCheck/{planId}
+    // /api/dashboard/check-coupon/{planId} (was couponsCheck/{planId})
     // ─────────────────────────────────────────────────────────────────
-    if (urlLower.includes('couponscheck')) {
-      log('🔍 Processing couponsCheck response');
+    if (urlLower.includes('couponscheck') || urlLower.includes('check-coupon')) {
+      log('🔍 Processing coupon check response');
       // Check the request body to see which coupon was submitted
       let submittedCoupon = null;
       if (requestBody) {
@@ -605,6 +615,7 @@
 
   function isCheckoutPage() {
     return window.location.pathname.includes('/checkout') ||
+           window.location.pathname.includes('/add-account') ||
            window.location.href.includes('plan_id=');
   }
 
@@ -649,6 +660,21 @@
         // with LAB auto-apply
 
         updateTrackerFromNetwork();
+      }
+    }
+
+    // Fallback: on /add-account page, plan is selected via radio buttons (value = plan UUID)
+    // Try to detect selected plan from DOM if still no plan loaded
+    if (!networkData.plan && Object.keys(networkData.plans).length > 0) {
+      const sizeRadios = document.querySelectorAll('input[type="radio"]:checked');
+      for (const radio of sizeRadios) {
+        if (radio.value && networkData.plans[radio.value]) {
+          log('🔗 Matched plan from selected radio button:', radio.value);
+          networkData.plan = networkData.plans[radio.value];
+          networkData.lastNetworkUpdate = Date.now();
+          updateTrackerFromNetwork();
+          break;
+        }
       }
     }
 
@@ -976,7 +1002,10 @@
     }
 
     // Check if LAB coupon already applied (look for chip with LAB text)
-    const existingChip = document.querySelector('.promo_chip');
+    // Old: .promo_chip, New: .MuiChip-root or other chip element
+    const existingChip = document.querySelector('.promo_chip') ||
+      Array.from(document.querySelectorAll('.MuiChip-root, [class*="chip"], [class*="Chip"]'))
+        .find(el => el.textContent?.toUpperCase().includes('LAB'));
     if (existingChip && existingChip.textContent?.toUpperCase().includes('LAB')) {
       log('✅ LAB coupon already applied (chip detected)');
       autofillAttempted = true;
@@ -1007,14 +1036,17 @@
     }
 
     try {
-      // Step 1: Find "Add promo code" button
-      let promoBtn = document.querySelector('.promo_btn');
+      // Step 1: Find discount/promo button
+      // Old: .promo_btn, New: .discountBtn (Tradeify 3.0 redesign April 2026)
+      let promoBtn = document.querySelector('.promo_btn, .discountBtn');
       if (!promoBtn) {
         // Fallback: search by text
         const allButtons = document.querySelectorAll('button');
         for (const btn of allButtons) {
           const text = btn.textContent?.toLowerCase() || '';
-          if (text.includes('add promo') || text.includes('promo code')) {
+          if (text.includes('add promo') || text.includes('promo code') ||
+              text.includes('discount code') || text.includes('add discount') ||
+              text.includes('coupon code') || text.includes('add coupon')) {
             promoBtn = btn;
             break;
           }
@@ -1022,26 +1054,78 @@
       }
 
       if (!promoBtn) {
-        log('⚠️ Promo button not found');
+        log('⚠️ Discount/promo button not found');
         autofillAttempted = true;
         autofillInProgress = false;
-        if (tracker) tracker.setAutoFillStatus('error', 'Promo button not found');
+        if (tracker) tracker.setAutoFillStatus('error', 'Discount button not found');
         return;
       }
 
-      // Click promo button with proper event simulation
-      log('📍 Found promo button, clicking...');
+      // Handle 2-step checkout: button is disabled until user completes Step 1 (auth)
+      if (promoBtn.disabled) {
+        log('⏳ Discount button found but disabled (Step 1 — waiting for auth)');
+        autofillInProgress = false;
+        // Do NOT set autofillAttempted — we want to retry after auth
+        if (tracker) tracker.setAutoFillStatus('applying', 'Waiting for login to complete...');
+
+        // Watch for the button to become enabled via MutationObserver
+        if (!window.__pfcDiscountBtnObserver) {
+          const observer = new MutationObserver(() => {
+            if (!promoBtn.disabled) {
+              log('✅ Discount button now enabled — triggering autofill');
+              observer.disconnect();
+              window.__pfcDiscountBtnObserver = null;
+              // Small delay to let Step 2 UI fully render
+              setTimeout(performAutofill, 500);
+            }
+          });
+          observer.observe(promoBtn, { attributes: true, attributeFilter: ['disabled'] });
+          window.__pfcDiscountBtnObserver = observer;
+
+          // Also observe parent in case button is replaced with a new element
+          if (promoBtn.parentElement) {
+            const parentObserver = new MutationObserver(() => {
+              const newBtn = document.querySelector('.promo_btn, .discountBtn');
+              if (newBtn && !newBtn.disabled && newBtn !== promoBtn) {
+                log('✅ New enabled discount button detected — triggering autofill');
+                parentObserver.disconnect();
+                observer.disconnect();
+                window.__pfcDiscountBtnObserver = null;
+                setTimeout(performAutofill, 500);
+              }
+            });
+            parentObserver.observe(promoBtn.parentElement, { childList: true, subtree: true });
+
+            // Cleanup after 120 seconds
+            setTimeout(() => {
+              observer.disconnect();
+              parentObserver.disconnect();
+              window.__pfcDiscountBtnObserver = null;
+              if (!autofillAttempted) {
+                log('⏰ Discount button observer timed out');
+                if (tracker) tracker.setAutoFillStatus('error', 'Timed out waiting for login');
+              }
+            }, 120000);
+          }
+        }
+        return;
+      }
+
+      // Click promo/discount button with proper event simulation
+      log('📍 Found discount button, clicking...');
       promoBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
       // Wait for input to appear
       await sleep(300);
 
-      // Step 2: Find promo input - try multiple selectors
+      // Step 2: Find discount/promo input - try multiple selectors
       let input = null;
       const inputSelectors = [
+        "input[placeholder*='discount' i]",
         "input[placeholder*='promo' i]",
         "input[placeholder*='coupon' i]",
         "input[placeholder*='code' i]",
+        "input[name*='discount' i]",
         "input[name*='promo' i]",
         "input[name*='coupon' i]",
         ".MuiInputBase-input"
@@ -1051,10 +1135,13 @@
       for (let attempt = 0; attempt < 10 && !input; attempt++) {
         for (const selector of inputSelectors) {
           const found = document.querySelector(selector);
-          // Make sure it's visible and not the search input
+          // Make sure it's visible and not an unrelated input (search, address, email, password)
           if (found && found.offsetParent !== null &&
               !found.placeholder?.toLowerCase().includes('search') &&
-              !found.placeholder?.toLowerCase().includes('address')) {
+              !found.placeholder?.toLowerCase().includes('address') &&
+              !found.placeholder?.toLowerCase().includes('email') &&
+              !found.placeholder?.toLowerCase().includes('password') &&
+              found.type !== 'email' && found.type !== 'password') {
             input = found;
             break;
           }
