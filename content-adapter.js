@@ -13,7 +13,7 @@
   if (window.__adapterContentLoaded) return;
   window.__adapterContentLoaded = true;
 
-  const DEBUG = true;
+  const DEBUG = false;
   function log(...args) {
     if (DEBUG) console.log('[ADAPTER]', ...args);
   }

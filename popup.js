@@ -9,8 +9,8 @@ const API_BASE_URL = 'https://propfirm.compare';
 
 // Local firm logo map — bundled with extension, no network needed
 const FIRM_LOGOS = {
-  // 'fundednext': 'logos/fundednext-futures.png',  // disabled — no active rewards program
-  // 'fundednext futures': 'logos/fundednext-futures.png',
+  'fundednext': 'logos/fundednext-futures.png',
+  'fundednext futures': 'logos/fundednext-futures.png',
   'tradeify': 'logos/tradeify.png',
   'lucid trading': 'logos/lucid-trading.png',
   'lucidtrading': 'logos/lucid-trading.png',
@@ -210,13 +210,12 @@ class PopupManager {
     // Fill list of supported prop firms with live API data only
     const supportedFirmsList = document.getElementById('supported-firms-list');
     if (supportedFirmsList && this.propFirmsData?.firms) {
-      // Filter to only show firms with API data (exclude FundedNext — no active rewards program)
+      // Filter to only show firms with API data
       const apiFirms = this.propFirmsData.firms.filter(firm =>
         firm.isApiEnhanced &&
         firm.apiData &&
         firm.apiData.discount &&
-        firm.apiData.discount !== "" &&
-        !firm.name?.toLowerCase().includes('fundednext')
+        firm.apiData.discount !== ""
       );
 
       // Sort firms by priority: featured first, then by discount

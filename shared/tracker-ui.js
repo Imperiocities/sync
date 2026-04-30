@@ -50,6 +50,43 @@
         closeBtn.addEventListener('click', () => this._toggleMinimize());
       }
 
+      // Drag-to-move: mousedown on header starts drag
+      const header = this.container.querySelector('.propfirm-tracker-header');
+      if (header) {
+        header.style.cursor = 'grab';
+        let dragging = false, startX = 0, startY = 0, origX = 0, origY = 0;
+
+        header.addEventListener('mousedown', (e) => {
+          if (e.target.closest('.propfirm-tracker-close')) return; // Don't drag on close btn
+          dragging = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          const rect = this.container.getBoundingClientRect();
+          origX = rect.left;
+          origY = rect.top;
+          header.style.cursor = 'grabbing';
+          this.container.style.transition = 'none';
+          e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+          if (!dragging) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          this.container.style.left = (origX + dx) + 'px';
+          this.container.style.top = (origY + dy) + 'px';
+          this.container.style.right = 'auto';
+          this.container.style.bottom = 'auto';
+        });
+
+        document.addEventListener('mouseup', () => {
+          if (!dragging) return;
+          dragging = false;
+          header.style.cursor = 'grab';
+          this.container.style.transition = '';
+        });
+      }
+
       // Add inline styles for tracker item label/value layout
       const style = document.createElement('style');
       style.textContent = `
